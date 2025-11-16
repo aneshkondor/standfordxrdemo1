@@ -6,6 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ensureUserDirectories = ensureUserDirectories;
 exports.getUserDirectories = getUserDirectories;
 exports.userDirectoryExists = userDirectoryExists;
+exports.createDefaultProfile = createDefaultProfile;
+exports.readUserProfile = readUserProfile;
+exports.updateUserProfile = updateUserProfile;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 /**
@@ -65,5 +68,69 @@ async function userDirectoryExists(userId) {
     catch {
         return false;
     }
+}
+/**
+ * Creates a default user profile with initial preferences
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<UserProfile> - The created user profile
+ */
+async function createDefaultProfile(userId) {
+    // Ensure user directories exist
+    const dirs = await ensureUserDirectories(userId);
+    const profilePath = path_1.default.join(dirs.root, 'profile.json');
+    // Create default profile
+    const defaultProfile = {
+        userId,
+        createdAt: new Date().toISOString(),
+        preferredTone: 'friendly',
+    };
+    // Write profile to file
+    await fs_1.promises.writeFile(profilePath, JSON.stringify(defaultProfile, null, 2), 'utf-8');
+    return defaultProfile;
+}
+/**
+ * Reads a user profile from disk
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<UserProfile | null> - The user profile, or null if it doesn't exist
+ */
+async function readUserProfile(userId) {
+    const dirs = getUserDirectories(userId);
+    const profilePath = path_1.default.join(dirs.root, 'profile.json');
+    try {
+        const fileContent = await fs_1.promises.readFile(profilePath, 'utf-8');
+        return JSON.parse(fileContent);
+    }
+    catch (error) {
+        // Profile doesn't exist or can't be read
+        return null;
+    }
+}
+/**
+ * Updates user profile with new preference fields
+ *
+ * @param userId - The unique identifier for the user
+ * @param updates - Partial profile data to update
+ * @returns Promise<UserProfile> - The updated user profile
+ */
+async function updateUserProfile(userId, updates) {
+    // Read existing profile or create default
+    let profile = await readUserProfile(userId);
+    if (!profile) {
+        profile = await createDefaultProfile(userId);
+    }
+    // Merge updates with existing profile
+    const updatedProfile = {
+        ...profile,
+        ...updates,
+        userId: profile.userId, // Ensure userId is never changed
+        createdAt: profile.createdAt, // Ensure createdAt is never changed
+    };
+    // Write updated profile to file
+    const dirs = getUserDirectories(userId);
+    const profilePath = path_1.default.join(dirs.root, 'profile.json');
+    await fs_1.promises.writeFile(profilePath, JSON.stringify(updatedProfile, null, 2), 'utf-8');
+    return updatedProfile;
 }
 //# sourceMappingURL=storage.js.map

@@ -31,5 +31,36 @@ export declare function getUserDirectories(userId: string): UserDirectories;
  * @returns Promise<boolean> - True if the user directory exists, false otherwise
  */
 export declare function userDirectoryExists(userId: string): Promise<boolean>;
+/**
+ * Interface for user profile data
+ */
+export interface UserProfile {
+    userId: string;
+    createdAt: string;
+    preferredTone?: 'professional' | 'casual' | 'friendly';
+    [key: string]: unknown;
+}
+/**
+ * Creates a default user profile with initial preferences
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<UserProfile> - The created user profile
+ */
+export declare function createDefaultProfile(userId: string): Promise<UserProfile>;
+/**
+ * Reads a user profile from disk
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<UserProfile | null> - The user profile, or null if it doesn't exist
+ */
+export declare function readUserProfile(userId: string): Promise<UserProfile | null>;
+/**
+ * Updates user profile with new preference fields
+ *
+ * @param userId - The unique identifier for the user
+ * @param updates - Partial profile data to update
+ * @returns Promise<UserProfile> - The updated user profile
+ */
+export declare function updateUserProfile(userId: string, updates: Partial<Omit<UserProfile, 'userId' | 'createdAt'>>): Promise<UserProfile>;
 export {};
 //# sourceMappingURL=storage.d.ts.map
