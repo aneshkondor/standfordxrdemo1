@@ -51,8 +51,8 @@ export class WebSocketClient {
   private manualDisconnect: boolean = false;
 
   constructor(config: WebSocketClientConfig = {}) {
-    // Default to localhost:3001, but allow override for Vision Pro testing
-    this.url = config.url || 'ws://localhost:3001';
+    // Default to localhost:3002 (backend), but allow override for Vision Pro testing
+    this.url = config.url || 'ws://localhost:3002';
     this.autoConnect = config.autoConnect !== undefined ? config.autoConnect : false;
 
     console.log('[WebSocketClient] Initialized with URL:', this.url);
@@ -386,7 +386,7 @@ export class WebSocketClient {
  * Shared across the application for consistent connection management
  */
 const websocketClient = new WebSocketClient({
-  url: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
+  url: import.meta.env.VITE_WS_URL || 'ws://localhost:3002',
   autoConnect: false
 });
 
