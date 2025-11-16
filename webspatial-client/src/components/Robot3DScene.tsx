@@ -10,6 +10,8 @@ import * as THREE from 'three';
  * Now loads the actual USDZ-converted GLB model.
  */
 
+const ROBOT_MODEL_PATH = `${import.meta.env.BASE_URL}models/robot.glb`.replace(/\/+/g, '/');
+
 interface RobotModelProps {
   position?: [number, number, number];
   scale?: number;
@@ -24,7 +26,7 @@ function RobotModel({ position = [0, 0, -2.75], scale = 0.5 }: RobotModelProps) 
   const robotRef = useRef<THREE.Group>(null);
 
   // Load the GLB model using useGLTF hook
-  const { scene } = useGLTF('/models/robot.glb');
+  const { scene } = useGLTF(ROBOT_MODEL_PATH);
 
   return (
     <primitive
@@ -37,7 +39,7 @@ function RobotModel({ position = [0, 0, -2.75], scale = 0.5 }: RobotModelProps) 
 }
 
 // Preload the model to avoid loading delays
-useGLTF.preload('/models/robot.glb');
+useGLTF.preload(ROBOT_MODEL_PATH);
 
 /**
  * SceneLighting - Configures ambient and directional lights

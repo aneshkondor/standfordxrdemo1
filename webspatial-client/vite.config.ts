@@ -5,6 +5,7 @@ import { createHtmlPlugin } from "vite-plugin-html";
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: process.env.XR_ENV === 'avp' ? '/webspatial/avp/' : '/',
   plugins: [
     react(),
     webSpatial(),
@@ -15,5 +16,5 @@ export default defineConfig({
         },
       },
     }),
-  ]
+  ],
 });

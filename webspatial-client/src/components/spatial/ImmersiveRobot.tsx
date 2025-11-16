@@ -6,6 +6,7 @@ import { getSpatialPose } from '../../xr/SpatialLayout';
 import { useSpatialAudioAnchor } from '../../xr/spatialAudio';
 
 const robotPose = getSpatialPose('robot');
+const ROBOT_MODEL_PATH = `${import.meta.env.BASE_URL}models/robot.glb`.replace(/\/+/g, '/');
 
 interface ImmersiveRobotProps {
   visible: boolean;
@@ -13,7 +14,7 @@ interface ImmersiveRobotProps {
 
 export default function ImmersiveRobot({ visible }: ImmersiveRobotProps) {
   const groupRef = useRef<Group | null>(null);
-  const gltf = useGLTF('/models/robot.glb') as { scene: Group };
+  const gltf = useGLTF(ROBOT_MODEL_PATH) as { scene: Group };
 
   useSpatialAudioAnchor(groupRef, { refDistance: 2.2 });
 
@@ -41,4 +42,4 @@ export default function ImmersiveRobot({ visible }: ImmersiveRobotProps) {
   );
 }
 
-useGLTF.preload('/models/robot.glb');
+useGLTF.preload(ROBOT_MODEL_PATH);
