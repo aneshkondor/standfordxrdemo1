@@ -2,7 +2,8 @@ import { useState } from 'react';
 import './App.css';
 import CenterDashboard from './components/CenterDashboard';
 import LeftTonePanel, { type ToneType } from './components/LeftTonePanel';
-import { useTherapyState } from './app-shell/TherapyStateController';
+import Robot3DScene from './components/Robot3DScene';
+import { useTherapyState, getComponentVisibility } from './app-shell/TherapyStateController';
 import { TherapyStateProvider } from './app-shell/TherapyStateProvider';
 
 /**
@@ -10,8 +11,11 @@ import { TherapyStateProvider } from './app-shell/TherapyStateProvider';
  * Contains the UI logic that needs access to therapy state context
  */
 function AppContent() {
-  const { startTherapy } = useTherapyState();
+  const { currentState, startTherapy } = useTherapyState();
   const [selectedTone, setSelectedTone] = useState<ToneType>('Friendly');
+
+  // Get component visibility based on current state
+  const { showDashboard, showRobotScene } = getComponentVisibility(currentState);
 
   /**
    * Handle tone selection change
@@ -32,9 +36,17 @@ function AppContent() {
   };
 
   return (
-    <div className="app-container" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
-      <LeftTonePanel onToneChange={handleToneChange} initialTone={selectedTone} />
-      <CenterDashboard onStartTherapy={handleStartTherapy} />
+    <div className="app-container" style={{ width: '100vw', height: '100vh' }}>
+      {/* Dashboard View - shown when idle */}
+      {showDashboard && (
+        <div style={{ display: 'flex', gap: '20px', padding: '20px', height: '100%' }}>
+          <LeftTonePanel onToneChange={handleToneChange} initialTone={selectedTone} />
+          <CenterDashboard onStartTherapy={handleStartTherapy} />
+        </div>
+      )}
+
+      {/* Robot Scene - shown during active therapy */}
+      {showRobotScene && <Robot3DScene />}
     </div>
   );
 }
