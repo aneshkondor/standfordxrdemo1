@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Therapy Room</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 100;
+            color: white;
+            text-align: center;
+        }
+        #talkButton {
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #FF6B6B;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        #talkButton:hover {
+            background: #FF5252;
+        }
+        #talkButton.talking {
+            background: #4CAF50;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <h3>VR Therapy Room</h3>
+        <p>Welcome to your safe space</p>
+    </div>
+
+    <div id="controls">
+        <button id="talkButton">Start Talking</button>
+        <div id="status">Ready to listen</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        let camera, scene, renderer, cameraRig;
+        let robot, robotHead, robotEyes;
+        let isConnected = false;
+        let isTalking = false;
+        let isResponseInProgress = false;
+        let audioContext, audioWorklet;
+        let mediaRecorder, audioChunks = [];
+        let talkStartTime = 0;
+        let audioChunksSent = 0;
+        let loadingManager;
+        let textureLoader;
+
+        // OpenAI Realtime API config
+        const DEBUG_MODE = false; // SET TO TRUE TO TEST VR WITHOUT API COSTS
+        const OPENAI_API_KEY = window.OPENAI_API_KEY || '';
+        const MODEL = 'gpt-4o-realtime-preview-2024-10-01'; // Cheapest realtime model
+        let ws = null;
+        let audioPlayer = null;
+        let audioQueue = [];
+        let isPlayingAudio = false;
+        let nextPlayTime = 0;
+
+        init();
+        animate();
+
+        function init() {
+            // Setup loading manager
+            loadingManager = new THREE.LoadingManager();
+            loadingManager.onStart = (url, itemsLoaded, itemsTotal) => {
+                console.log(`Loading: ${itemsLoaded}/${itemsTotal} - ${url}`);
+                document.getElementById('status').textContent = `Loading assets... ${itemsLoaded}/${itemsTotal}`;
+            };
+            loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+                console.log(`Loading: ${itemsLoaded}/${itemsTotal}`);
+                document.getElementById('status').textContent = `Loading assets... ${itemsLoaded}/${itemsTotal}`;
+            };
+            loadingManager.onLoad = () => {
+                console.log('All assets loaded!');
+                document.getElementById('status').textContent = 'Assets loaded - Connecting to AI...';
+            };
+            loadingManager.onError = (url) => {
+                console.error('Error loading:', url);
+            };
+
+            textureLoader = new THREE.TextureLoader(loadingManager);
+
+            // Scene setup
+            scene = new THREE.Scene();
+
+            // Coffee shop atmosphere - warm and cozy
+            const skyColor = 0xFFE4CC; // Warm beige
+            const fogColor = 0xFFE4CC; // Warm fog for atmosphere
+            scene.background = new THREE.Color(skyColor);
+            scene.fog = new THREE.Fog(fogColor, 5, 20);
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                100
+            );
+
+            // Create a camera rig for VR positioning
+            cameraRig = new THREE.Group();
+            cameraRig.position.set(0, 0.5, -0.2); // Position user sitting in chair, facing forward
+            cameraRig.add(camera);
+            scene.add(cameraRig);
+
+            camera.position.set(0, 1.1, 0); // Eye level relative to rig
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Add VR button
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // Setup VR session reference space for seated experience
+            renderer.xr.addEventListener('sessionstart', async () => {
+                const session = renderer.xr.getSession();
+                const refSpace = await session.requestReferenceSpace('local-floor');
+                renderer.xr.setReferenceSpace(refSpace);
+            });
+
+            // Lighting - warm coffee shop atmosphere
+            const ambientLight = new THREE.AmbientLight(0xFFE4B5, 0.6); // Warm ambient
+            scene.add(ambientLight);
+
+            // Main overhead warm light
+            const directionalLight = new THREE.DirectionalLight(0xFFDDB5, 0.8);
+            directionalLight.position.set(3, 5, 2);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            // Warm point lights for cozy cafe feel
+            const warmLight1 = new THREE.PointLight(0xFFCC99, 0.6, 10);
+            warmLight1.position.set(-2, 2.5, -2);
+            warmLight1.castShadow = true;
+            scene.add(warmLight1);
+
+            const warmLight2 = new THREE.PointLight(0xFFCC99, 0.6, 10);
+            warmLight2.position.set(2, 2.5, -2);
+            warmLight2.castShadow = true;
+            scene.add(warmLight2);
+
+            // Create the coffee shop environment
+            createCoffeeShopEnvironment();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Setup voice controls
+            setupVoiceControls();
+
+            // Initialize OpenAI Realtime connection
+            initializeRealtimeAPI();
+        }
+
+        function createCoffeeShopEnvironment() {
+            // Load photorealistic HDRI skybox - Cozy Cafe
+            // Using Poly Haven's free "Comfy Cafe" HDRI
+            const hdrLoader = new THREE.TextureLoader(loadingManager);
+            hdrLoader.load(
+                'https://dl.polyhaven.org/file/ph-assets/HDRIs/extra/Tonemapped%20JPG/comfy_cafe.jpg',
+                (texture) => {
+                    texture.mapping = THREE.EquirectangularReflectionMapping;
+                    scene.background = texture;
+                    scene.environment = texture; // For realistic reflections and lighting
+                    console.log('Coffee shop HDRI loaded successfully');
+                },
+                undefined,
+                (err) => {
+                    console.error('Failed to load HDRI, using fallback', err);
+                }
+            );
+        }
+
+        function createUserChair() {
+            const chairGroup = new THREE.Group();
+
+            // Chair seat - smaller
+            const seatGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.5);
+            const chairMaterial = new THREE.MeshStandardMaterial({
+                color: 0x6B8E23, // Olive green
+                roughness: 0.7,
+                metalness: 0.1
+            });
+            const seat = new THREE.Mesh(seatGeometry, chairMaterial);
+            seat.position.y = 0.5;
+            seat.castShadow = true;
+            chairGroup.add(seat);
+
+            // Chair back - smaller
+            const backGeometry = new THREE.BoxGeometry(0.5, 0.6, 0.08);
+            const back = new THREE.Mesh(backGeometry, chairMaterial);
+            back.position.set(0, 0.8, -0.21);
+            back.castShadow = true;
+            chairGroup.add(back);
+
+            // Chair legs (4)
+            const legGeometry = new THREE.CylinderGeometry(0.025, 0.025, 0.5);
+            const legPositions = [
+                [-0.2, 0.25, -0.2],
+                [0.2, 0.25, -0.2],
+                [-0.2, 0.25, 0.2],
+                [0.2, 0.25, 0.2]
+            ];
+
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeometry, chairMaterial);
+                leg.position.set(pos[0], pos[1], pos[2]);
+                leg.castShadow = true;
+                chairGroup.add(leg);
+            });
+
+            // Position chair directly under user (0,0,0)
+            chairGroup.position.set(0, 0, 0);
+            scene.add(chairGroup);
+        }
+
+        async function createRobotTherapist() {
+            // Load 3D model instead of geometric shapes
+            const loader = new GLTFLoader();
+
+            try {
+                const gltf = await loader.loadAsync('https://modelviewer.dev/shared-assets/models/RobotExpressive.glb');
+                robot = gltf.scene;
+
+                // Scale and position the model - MUCH SMALLER!
+                robot.scale.set(0.3, 0.3, 0.3);
+                robot.position.set(0, 0.2, -2.5);
+                robot.castShadow = true;
+                robot.receiveShadow = true;
+
+                // Enable shadows for all meshes in the model
+                robot.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                scene.add(robot);
+                console.log('3D robot model loaded successfully');
+                return;
+            } catch (error) {
+                console.error('Error loading 3D model, using fallback:', error);
+            }
+
+            // Fallback to geometric robot if model fails to load
+            robot = new THREE.Group();
+
+            // Robot body - rounded, friendly
+            const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.35, 0.8, 32);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: 0x87CEEB, // Sky blue - friendly color
+                roughness: 0.3,
+                metalness: 0.6
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.0;
+            body.castShadow = true;
+            robot.add(body);
+
+            // Robot head - rounded
+            const headGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+            const headMaterial = new THREE.MeshStandardMaterial({
+                color: 0xE0FFFF, // Light cyan
+                roughness: 0.2,
+                metalness: 0.7
+            });
+            robotHead = new THREE.Mesh(headGeometry, headMaterial);
+            robotHead.position.y = 1.6;
+            robotHead.castShadow = true;
+            robot.add(robotHead);
+
+            // Robot eyes - two friendly circles
+            robotEyes = new THREE.Group();
+            const eyeGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+            const eyeMaterial = new THREE.MeshStandardMaterial({
+                color: 0x4169E1, // Royal blue - warm, trustworthy
+                emissive: 0x4169E1,
+                emissiveIntensity: 0.5
+            });
+
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.1, 1.65, 0.2);
+            robotEyes.add(leftEye);
+
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.1, 1.65, 0.2);
+            robotEyes.add(rightEye);
+
+            robot.add(robotEyes);
+
+            // Antenna - adds character
+            const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.2);
+            const antennaMaterial = new THREE.MeshStandardMaterial({
+                color: 0xFF6347,
+                metalness: 0.8
+            });
+            const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial);
+            antenna.position.y = 1.85;
+            robot.add(antenna);
+
+            const antennaBallGeometry = new THREE.SphereGeometry(0.05);
+            const antennaBall = new THREE.Mesh(antennaBallGeometry, new THREE.MeshStandardMaterial({
+                color: 0xFF6347,
+                emissive: 0xFF6347,
+                emissiveIntensity: 0.3
+            }));
+            antennaBall.position.y = 1.95;
+            robot.add(antennaBall);
+
+            // Arms - simple cylinders
+            const armGeometry = new THREE.CylinderGeometry(0.06, 0.06, 0.6);
+            const armMaterial = new THREE.MeshStandardMaterial({
+                color: 0x87CEEB,
+                roughness: 0.3,
+                metalness: 0.6
+            });
+
+            const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+            leftArm.position.set(-0.4, 1.0, 0);
+            leftArm.rotation.z = Math.PI / 6;
+            leftArm.castShadow = true;
+            robot.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+            rightArm.position.set(0.4, 1.0, 0);
+            rightArm.rotation.z = -Math.PI / 6;
+            rightArm.castShadow = true;
+            robot.add(rightArm);
+
+            // Position robot across from user
+            robot.position.set(0, 0.2, -2.5);
+            scene.add(robot);
+        }
+
+        async function loadPersonModel() {
+            const loader = new GLTFLoader();
+
+            try {
+                console.log('Loading person model...');
+                const gltf = await loader.loadAsync('person.glb');
+                const person = gltf.scene;
+
+                // Scale and position the person model
+                // Make them much bigger and position nicely in the room
+                person.scale.set(12, 12, 12); // 12x bigger (4 * 3)!
+                person.position.set(1.5, 0, -1.5); // Right side of the room, visible from chair
+                person.rotation.y = -Math.PI / 4; // Face towards the user
+
+                // Enable shadows
+                person.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                scene.add(person);
+                console.log('Person model loaded successfully at position:', person.position);
+                console.log('Person model scale:', person.scale);
+            } catch (error) {
+                console.error('Error loading person model:', error);
+                console.error('Full error details:', error.message, error.stack);
+            }
+        }
+
+        async function initializeRealtimeAPI() {
+            const status = document.getElementById('status');
+
+            if (DEBUG_MODE) {
+                console.log('DEBUG MODE: Skipping OpenAI connection');
+                status.textContent = 'DEBUG MODE - No API (test VR positioning)';
+                isConnected = true;
+                return;
+            }
+
+            try {
+                // Create WebSocket connection to OpenAI Realtime API
+                const url = 'wss://api.openai.com/v1/realtime?model=' + MODEL;
+                ws = new WebSocket(url, ['realtime', 'openai-insecure-api-key.' + OPENAI_API_KEY]);
+
+                ws.addEventListener('open', () => {
+                    console.log('Connected to OpenAI Realtime API');
+                    status.textContent = 'Connected - Ready to talk';
+                    isConnected = true;
+
+                    // Send session configuration - ABSOLUTE BARE MINIMUM
+                    const sessionConfig = {
+                        type: 'session.update',
+                        session: {
+                            type: 'realtime',
+                            instructions: 'You are a warm, empathetic, and supportive AI therapist named Ally. Your role is to listen actively, provide emotional support, and help users explore their thoughts and feelings in a safe, non-judgmental space. Be encouraging, patient, and calming. Keep responses brief (2-3 sentences) and conversational.'
+                        }
+                    };
+                    console.log('Sending session config:', sessionConfig);
+                    ws.send(JSON.stringify(sessionConfig));
+                });
+
+                ws.addEventListener('message', async (event) => {
+                    const data = JSON.parse(event.data);
+                    console.log('Received:', data.type);
+
+                    if (data.type === 'response.output_audio.delta') {
+                        // Received audio response from AI - CORRECT EVENT NAME!
+                        isResponseInProgress = true;
+                        // The audio is in data.delta, not data.audio
+                        const audioData = base64ToArrayBuffer(data.delta);
+                        await playAudio(audioData);
+                        animateRobotTalking();
+                        status.textContent = 'Robot is speaking...';
+                    } else if (data.type === 'response.output_audio.done') {
+                        console.log('Audio output complete');
+                    } else if (data.type === 'response.done') {
+                        console.log('Response completed');
+                        status.textContent = 'Ready to listen';
+                        isResponseInProgress = false;
+                        // Reset audio timing for next response
+                        if (audioPlayer) {
+                            nextPlayTime = audioPlayer.currentTime;
+                        }
+                    } else if (data.type === 'conversation.item.created') {
+                        console.log('AI is responding...');
+                        status.textContent = 'Therapist is responding...';
+                    } else if (data.type === 'input_audio_buffer.committed') {
+                        console.log('Audio buffer committed');
+                    } else if (data.type === 'input_audio_buffer.speech_started') {
+                        console.log('Speech detected');
+                    } else if (data.type === 'input_audio_buffer.speech_stopped') {
+                        console.log('Speech stopped');
+                    } else if (data.type === 'error') {
+                        console.error('API Error:', data);
+                        console.error('Error details:', JSON.stringify(data.error, null, 2));
+                        status.textContent = 'Error: ' + (data.error?.message || 'Unknown error');
+                        isResponseInProgress = false;
+                    }
+                });
+
+                ws.addEventListener('error', (error) => {
+                    console.error('WebSocket error:', error);
+                    status.textContent = 'Connection error';
+                    isConnected = false;
+                });
+
+                ws.addEventListener('close', () => {
+                    console.log('Disconnected from OpenAI');
+                    status.textContent = 'Disconnected - Refresh to reconnect';
+                    isConnected = false;
+                });
+
+            } catch (error) {
+                console.error('Failed to initialize Realtime API:', error);
+                status.textContent = 'Failed to connect';
+            }
+        }
+
+        function setupVoiceControls() {
+            const talkButton = document.getElementById('talkButton');
+
+            // Toggle mode - click to start, click to stop
+            talkButton.addEventListener('click', async () => {
+                if (!isTalking) {
+                    await startTalking();
+                } else {
+                    stopTalking();
+                }
+            });
+
+            // Also support spacebar for desktop testing (toggle mode)
+            window.addEventListener('keydown', async (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    if (!isTalking) {
+                        await startTalking();
+                    } else {
+                        stopTalking();
+                    }
+                }
+            });
+        }
+
+        async function startTalking() {
+            if (!isConnected) {
+                document.getElementById('status').textContent = 'Not connected to AI';
+                return;
+            }
+
+            if (isResponseInProgress) {
+                document.getElementById('status').textContent = 'Please wait for AI to finish...';
+                return;
+            }
+
+            const talkButton = document.getElementById('talkButton');
+            const status = document.getElementById('status');
+
+            isTalking = true;
+            talkButton.classList.add('talking');
+            talkButton.textContent = 'Stop Recording';
+            status.textContent = 'Recording... Click to send';
+            talkStartTime = Date.now();
+            audioChunksSent = 0;
+
+            // Animate robot eyes while listening
+            animateRobotListening(true);
+
+            if (DEBUG_MODE) {
+                console.log('DEBUG MODE: Skipping audio recording');
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 24000,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+
+                audioContext = new AudioContext({ sampleRate: 24000 });
+                const source = audioContext.createMediaStreamSource(stream);
+
+                // Create audio worklet for processing
+                await audioContext.audioWorklet.addModule(createAudioWorkletBlob());
+                const workletNode = new AudioWorkletNode(audioContext, 'audio-processor');
+
+                workletNode.port.onmessage = (event) => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        // Convert Float32 to Int16 PCM
+                        const float32 = event.data;
+                        const int16 = new Int16Array(float32.length);
+                        for (let i = 0; i < float32.length; i++) {
+                            int16[i] = Math.max(-32768, Math.min(32767, Math.floor(float32[i] * 32768)));
+                        }
+
+                        // Send to OpenAI as base64
+                        const base64Audio = arrayBufferToBase64(int16.buffer);
+                        ws.send(JSON.stringify({
+                            type: 'input_audio_buffer.append',
+                            audio: base64Audio
+                        }));
+
+                        audioChunksSent++;
+                        if (audioChunksSent % 10 === 0) {
+                            console.log(`Sent ${audioChunksSent} audio chunks to OpenAI`);
+                        }
+                    }
+                };
+
+                source.connect(workletNode);
+                workletNode.connect(audioContext.destination);
+
+                // Store for cleanup
+                window.currentStream = stream;
+                window.currentWorklet = workletNode;
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                status.textContent = 'Error: Could not access microphone';
+                isTalking = false;
+                talkButton.classList.remove('talking');
+                talkButton.textContent = 'Start Talking';
+            }
+        }
+
+        function stopTalking() {
+            const talkButton = document.getElementById('talkButton');
+            const status = document.getElementById('status');
+
+            isTalking = false;
+            talkButton.classList.remove('talking');
+            talkButton.textContent = 'Start Talking';
+
+            if (!isResponseInProgress) {
+                status.textContent = 'Processing...';
+            }
+
+            animateRobotListening(false);
+
+            // Give a small delay to ensure audio has been sent, then stop and commit
+            setTimeout(() => {
+                const talkDuration = Date.now() - talkStartTime;
+
+                if (window.currentStream) {
+                    window.currentStream.getTracks().forEach(track => track.stop());
+                }
+                if (window.currentWorklet) {
+                    window.currentWorklet.disconnect();
+                }
+                if (audioContext) {
+                    audioContext.close();
+                }
+
+                // Only commit if we have enough audio (at least 3 chunks ≈ 100ms)
+                const hasEnoughAudio = audioChunksSent >= 3;
+
+                // Commit the audio buffer to trigger response
+                if (DEBUG_MODE) {
+                    // Debug mode: simulate a response
+                    console.log('DEBUG MODE: Simulating AI response');
+                    status.textContent = 'DEBUG: Simulated response';
+                    animateRobotTalking();
+                    setTimeout(() => {
+                        status.textContent = 'DEBUG MODE - Ready';
+                    }, 2000);
+                } else if (!hasEnoughAudio) {
+                    console.log(`Not enough audio: only ${audioChunksSent} chunks (${talkDuration}ms)`);
+                    status.textContent = 'Speak longer (min 1 second)';
+                    setTimeout(() => {
+                        status.textContent = 'Ready to listen';
+                    }, 2000);
+                } else if (isResponseInProgress) {
+                    console.log('Response already in progress, waiting...');
+                    status.textContent = 'AI is still responding...';
+                } else if (ws && ws.readyState === WebSocket.OPEN) {
+                    console.log(`Committing audio buffer... (${audioChunksSent} chunks, ${talkDuration}ms)`);
+                    ws.send(JSON.stringify({
+                        type: 'input_audio_buffer.commit'
+                    }));
+                    ws.send(JSON.stringify({
+                        type: 'response.create'
+                    }));
+                }
+            }, 200); // 200ms delay to ensure audio is buffered
+        }
+
+        function createAudioWorkletBlob() {
+            const workletCode = `
+                class AudioProcessor extends AudioWorkletProcessor {
+                    process(inputs, outputs, parameters) {
+                        const input = inputs[0];
+                        if (input.length > 0) {
+                            this.port.postMessage(input[0]);
+                        }
+                        return true;
+                    }
+                }
+                registerProcessor('audio-processor', AudioProcessor);
+            `;
+            const blob = new Blob([workletCode], { type: 'application/javascript' });
+            return URL.createObjectURL(blob);
+        }
+
+        async function playAudio(audioData) {
+            if (!audioPlayer) {
+                audioPlayer = new AudioContext({ sampleRate: 24000 });
+                nextPlayTime = audioPlayer.currentTime;
+            }
+
+            const int16Array = new Int16Array(audioData);
+            const float32Array = new Float32Array(int16Array.length);
+
+            for (let i = 0; i < int16Array.length; i++) {
+                float32Array[i] = int16Array[i] / 32768;
+            }
+
+            const audioBuffer = audioPlayer.createBuffer(1, float32Array.length, 24000);
+            audioBuffer.getChannelData(0).set(float32Array);
+
+            const source = audioPlayer.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioPlayer.destination);
+
+            // Schedule this chunk to play at the right time
+            const currentTime = audioPlayer.currentTime;
+            const scheduleTime = Math.max(currentTime, nextPlayTime);
+
+            source.start(scheduleTime);
+
+            // Update next play time (duration of this chunk)
+            nextPlayTime = scheduleTime + audioBuffer.duration;
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function animateRobotListening(isListening) {
+            if (robotEyes && robotEyes.children) {
+                if (isListening) {
+                    robotEyes.children.forEach(eye => {
+                        eye.material.emissiveIntensity = 0.8;
+                    });
+                } else {
+                    robotEyes.children.forEach(eye => {
+                        eye.material.emissiveIntensity = 0.5;
+                    });
+                }
+            }
+        }
+
+        function animateRobotTalking() {
+            if (!robot) return;
+
+            let talkCount = 0;
+            const talkInterval = setInterval(() => {
+                // Animate the whole robot slightly
+                if (robot) {
+                    robot.rotation.y = Math.sin(Date.now() * 0.01) * 0.05;
+                }
+                // Also animate head if it exists (geometric fallback)
+                if (robotHead) {
+                    robotHead.rotation.y = Math.sin(Date.now() * 0.01) * 0.1;
+                }
+
+                talkCount++;
+                if (talkCount > 30) {
+                    clearInterval(talkInterval);
+                    if (robot) robot.rotation.y = 0;
+                    if (robotHead) robotHead.rotation.y = 0;
+                }
+            }, 50);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        function render() {
+            // Gentle breathing animation for robot
+            if (robot) {
+                // If it's a 3D model, animate the whole model
+                if (robot.isGroup || robot.isScene) {
+                    const baseY = robot.position.z === -2.5 ? 0.2 : robot.position.y;
+                    robot.position.y = baseY + Math.sin(Date.now() * 0.001) * 0.02;
+                } else {
+                    // Fallback for geometric robot
+                    robot.position.y = 0.2 + Math.sin(Date.now() * 0.001) * 0.02;
+                    if (robotHead) {
+                        robotHead.rotation.x = Math.sin(Date.now() * 0.0008) * 0.05;
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
