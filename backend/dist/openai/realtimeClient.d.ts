@@ -29,5 +29,23 @@ export declare class OpenAIRealtimeClient {
      * Check if connected
      */
     getConnectionStatus(): boolean;
+    /**
+     * Configure session with therapist instructions
+     * Step 2: Send Session Configuration
+     */
+    configureSession(): void;
+    /**
+     * Send audio input to OpenAI
+     * Step 3: Implement Audio Input Handler
+     */
+    sendAudioInput(audioData: string): void;
+    /**
+     * Commit audio buffer (optional - triggers response if not using VAD)
+     */
+    commitAudioBuffer(): void;
+    /**
+     * Clear audio buffer
+     */
+    clearAudioBuffer(): void;
 }
 //# sourceMappingURL=realtimeClient.d.ts.map

@@ -1,4 +1,6 @@
 import WebSocket from 'ws';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // OpenAI Realtime API Configuration
 const OPENAI_API_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
@@ -137,5 +139,99 @@ export class OpenAIRealtimeClient {
    */
   public getConnectionStatus(): boolean {
     return this.isConnected;
+  }
+
+  /**
+   * Configure session with therapist instructions
+   * Step 2: Send Session Configuration
+   */
+  public configureSession(): void {
+    try {
+      // Load therapist instructions from prompt file
+      const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
+      const instructions = fs.readFileSync(promptPath, 'utf-8').trim();
+
+      console.log('Loading therapist instructions from prompt file...');
+      console.log(`Instructions: ${instructions.substring(0, 100)}...`);
+
+      // Send session.update configuration
+      const sessionConfig = {
+        type: 'session.update',
+        session: {
+          modalities: ['text', 'audio'],
+          instructions: instructions,
+          voice: 'alloy',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 200
+          }
+        }
+      };
+
+      this.send(sessionConfig);
+      console.log('✓ Session configuration sent successfully');
+    } catch (error) {
+      console.error('Failed to configure session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send audio input to OpenAI
+   * Step 3: Implement Audio Input Handler
+   */
+  public sendAudioInput(audioData: string): void {
+    try {
+      const message = {
+        type: 'input_audio_buffer.append',
+        audio: audioData
+      };
+
+      this.send(message);
+    } catch (error) {
+      console.error('Error sending audio input:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Commit audio buffer (optional - triggers response if not using VAD)
+   */
+  public commitAudioBuffer(): void {
+    try {
+      const message = {
+        type: 'input_audio_buffer.commit'
+      };
+
+      this.send(message);
+      console.log('Audio buffer committed');
+    } catch (error) {
+      console.error('Error committing audio buffer:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear audio buffer
+   */
+  public clearAudioBuffer(): void {
+    try {
+      const message = {
+        type: 'input_audio_buffer.clear'
+      };
+
+      this.send(message);
+      console.log('Audio buffer cleared');
+    } catch (error) {
+      console.error('Error clearing audio buffer:', error);
+      throw error;
+    }
   }
 }
