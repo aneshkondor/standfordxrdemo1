@@ -11,20 +11,23 @@ import { createContext, useContext } from 'react';
  * Therapy State Enum
  * Defines all possible states of the therapy application
  */
-export enum TherapyState {
+export const TherapyState = {
   /** Dashboard visible, no audio active */
-  IDLE = 'idle',
+  IDLE: 'idle',
   /** Robot scene visible, audio active */
-  ACTIVE_THERAPY = 'active_therapy',
+  ACTIVE_THERAPY: 'active_therapy',
   /** Therapy scene visible but audio inactive */
-  PAUSED = 'paused',
-}
+  PAUSED: 'paused',
+} as const;
+
+export type TherapyState = typeof TherapyState[keyof typeof TherapyState];
 
 /**
  * Therapy Tone Types
  * Defines available therapy tones that can be selected
+ * Matches backend API tone presets
  */
-export type TherapyTone = 'calm' | 'energetic' | 'supportive' | 'professional';
+export type TherapyTone = 'Soft' | 'Friendly' | 'Analytical';
 
 /**
  * Therapy Session Data
