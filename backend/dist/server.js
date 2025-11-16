@@ -6,10 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const http_1 = __importDefault(require("http"));
 const websocketServer_1 = require("./websocketServer");
+const session_1 = __importDefault(require("./routes/session"));
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(express_1.default.json());
+// Register routes
+app.use('/session', session_1.default);
 // Basic health check endpoint
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', message: 'Backend server is running' });

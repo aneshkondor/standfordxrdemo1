@@ -1,12 +1,16 @@
 import express, { Request, Response } from 'express';
 import http from 'http';
 import { AudioStreamingWebSocketServer } from './websocketServer';
+import sessionRouter from './routes/session';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(express.json());
+
+// Register routes
+app.use('/session', sessionRouter);
 
 // Basic health check endpoint
 app.get('/health', (_req: Request, res: Response) => {
