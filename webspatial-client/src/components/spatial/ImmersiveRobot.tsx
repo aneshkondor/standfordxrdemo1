@@ -6,7 +6,7 @@ import { getSpatialPose } from '../../xr/SpatialLayout';
 import { useSpatialAudioAnchor } from '../../xr/spatialAudio';
 
 const robotPose = getSpatialPose('robot');
-const ROBOT_MODEL_PATH = '/models/robot.glb';
+const ROBOT_MODEL_PATH = '/webspatial/avp/models/robot.glb';
 
 interface ImmersiveRobotProps {
   visible: boolean;
