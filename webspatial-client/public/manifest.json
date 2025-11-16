@@ -9,6 +9,9 @@
   "background_color": "#000000",
   "theme_color": "#667BC6",
   "categories": ["health", "lifestyle"],
+  "permissions": [
+    "microphone"
+  ],
   "icons": [
     {
       "src": "/icon-1024.png",
