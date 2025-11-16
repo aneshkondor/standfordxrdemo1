@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './App.css';
 import CenterDashboard from './components/CenterDashboard';
+import LeftTonePanel, { type ToneType } from './components/LeftTonePanel';
 import { useTherapyState } from './app-shell/TherapyStateController';
 import { TherapyStateProvider } from './app-shell/TherapyStateProvider';
 
@@ -10,18 +11,29 @@ import { TherapyStateProvider } from './app-shell/TherapyStateProvider';
  */
 function AppContent() {
   const { startTherapy } = useTherapyState();
-  const [selectedTone] = useState<'Soft' | 'Friendly' | 'Analytical'>('Friendly');
+  const [selectedTone, setSelectedTone] = useState<ToneType>('Friendly');
+
+  /**
+   * Handle tone selection change
+   * Updates the selected tone when user clicks a tone button
+   */
+  const handleToneChange = (tone: ToneType) => {
+    setSelectedTone(tone);
+    console.log(`[App] Tone changed to: ${tone}`);
+  };
 
   /**
    * Handle Start Therapy button click
    * Initiates therapy session with the currently selected tone
    */
   const handleStartTherapy = () => {
+    console.log(`[App] Starting therapy with tone: ${selectedTone}`);
     startTherapy(selectedTone);
   };
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ display: 'flex', gap: '20px', padding: '20px' }}>
+      <LeftTonePanel onToneChange={handleToneChange} initialTone={selectedTone} />
       <CenterDashboard onStartTherapy={handleStartTherapy} />
     </div>
   );
