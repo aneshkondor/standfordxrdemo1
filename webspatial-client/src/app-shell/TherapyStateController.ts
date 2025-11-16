@@ -51,8 +51,8 @@ export interface TherapyStateContextType {
   currentState: TherapyState;
   /** Current session data */
   session: TherapySession;
-  /** Transition handlers (to be implemented in Step 2) */
-  startTherapy: (tone: TherapyTone) => void;
+  /** Transition handlers */
+  startTherapy: (tone: TherapyTone) => Promise<void>;
   pauseTherapy: () => void;
   exitTherapy: () => void;
 }
