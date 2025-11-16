@@ -9,6 +9,10 @@ exports.userDirectoryExists = userDirectoryExists;
 exports.createDefaultProfile = createDefaultProfile;
 exports.readUserProfile = readUserProfile;
 exports.updateUserProfile = updateUserProfile;
+exports.loadMemorySummary = loadMemorySummary;
+exports.createDefaultMemory = createDefaultMemory;
+exports.updateMemory = updateMemory;
+exports.getMemoryContext = getMemoryContext;
 const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 /**
@@ -132,5 +136,91 @@ async function updateUserProfile(userId, updates) {
     const profilePath = path_1.default.join(dirs.root, 'profile.json');
     await fs_1.promises.writeFile(profilePath, JSON.stringify(updatedProfile, null, 2), 'utf-8');
     return updatedProfile;
+}
+/**
+ * Loads existing memory summary and narrative from disk
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<MemorySummary | null> - The memory summary, or null if it doesn't exist
+ */
+async function loadMemorySummary(userId) {
+    const dirs = getUserDirectories(userId);
+    const memoryPath = path_1.default.join(dirs.root, 'memory.json');
+    try {
+        const fileContent = await fs_1.promises.readFile(memoryPath, 'utf-8');
+        return JSON.parse(fileContent);
+    }
+    catch (error) {
+        // Memory doesn't exist or can't be read
+        return null;
+    }
+}
+/**
+ * Creates a default memory structure for a new user
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<MemorySummary> - The created memory summary
+ */
+async function createDefaultMemory(userId) {
+    // Ensure user directories exist
+    const dirs = await ensureUserDirectories(userId);
+    const memoryPath = path_1.default.join(dirs.root, 'memory.json');
+    const defaultMemory = {
+        userId,
+        narrative: 'New user - no conversation history yet.',
+        keyThemes: [],
+        sessionSummaries: [],
+        lastUpdated: new Date().toISOString(),
+    };
+    await fs_1.promises.writeFile(memoryPath, JSON.stringify(defaultMemory, null, 2), 'utf-8');
+    return defaultMemory;
+}
+/**
+ * Updates memory after sessions with new insights
+ * Appends session summaries to the memory structure
+ *
+ * @param userId - The unique identifier for the user
+ * @param sessionSummary - The session summary to append
+ * @param newNarrative - Optional updated narrative summary
+ * @param newThemes - Optional new key themes to add
+ * @returns Promise<MemorySummary> - The updated memory summary
+ */
+async function updateMemory(userId, sessionSummary, newNarrative, newThemes) {
+    // Load existing memory or create default
+    let memory = await loadMemorySummary(userId);
+    if (!memory) {
+        memory = await createDefaultMemory(userId);
+    }
+    // Append new session summary
+    const updatedMemory = {
+        ...memory,
+        narrative: newNarrative || memory.narrative,
+        keyThemes: newThemes
+            ? [...new Set([...memory.keyThemes, ...newThemes])] // Merge and deduplicate themes
+            : memory.keyThemes,
+        sessionSummaries: [...memory.sessionSummaries, sessionSummary],
+        lastUpdated: new Date().toISOString(),
+    };
+    // Write updated memory to file
+    const dirs = getUserDirectories(userId);
+    const memoryPath = path_1.default.join(dirs.root, 'memory.json');
+    await fs_1.promises.writeFile(memoryPath, JSON.stringify(updatedMemory, null, 2), 'utf-8');
+    return updatedMemory;
+}
+/**
+ * Returns narrative summary and key themes for AI context
+ *
+ * @param userId - The unique identifier for the user
+ * @returns Promise<{ narrative: string; keyThemes: string[] } | null> - Context data or null
+ */
+async function getMemoryContext(userId) {
+    const memory = await loadMemorySummary(userId);
+    if (!memory) {
+        return null;
+    }
+    return {
+        narrative: memory.narrative,
+        keyThemes: memory.keyThemes,
+    };
 }
 //# sourceMappingURL=storage.js.map
