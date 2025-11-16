@@ -1,63 +1,43 @@
-import { useRef } from 'react';
+import { Suspense, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 /**
  * Robot3DScene Component
  *
  * Displays a 3D robot therapist in a spatial environment using Three.js
- * Currently uses placeholder geometry (sphere head + cylinder body) until
- * the team provides the USDZ file.
+ * Now loads the actual USDZ-converted GLB model.
  */
 
-interface RobotPlaceholderProps {
+interface RobotModelProps {
   position?: [number, number, number];
+  scale?: number;
 }
 
 /**
- * RobotPlaceholder - Simple geometric representation of robot
- * Height: ~0.9 meters (3 feet)
- * Colors: Sky blue and light cyan for friendly appearance
+ * RobotModel - Loads and displays the actual robot GLB model
+ * Height: Scaled to ~0.9 meters (3 feet)
+ * Position: 2.75 meters in front of user for optimal viewing
  */
-function RobotPlaceholder({ position = [0, 0, -2.75] }: RobotPlaceholderProps) {
+function RobotModel({ position = [0, 0, -2.75], scale = 0.5 }: RobotModelProps) {
   const robotRef = useRef<THREE.Group>(null);
 
+  // Load the GLB model using useGLTF hook
+  const { scene } = useGLTF('/models/robot.glb');
+
   return (
-    <group ref={robotRef} position={position}>
-      {/* Robot Body - Cylinder */}
-      <mesh position={[0, -0.15, 0]}>
-        <cylinderGeometry args={[0.15, 0.2, 0.5, 32]} />
-        <meshStandardMaterial color="#87CEEB" /> {/* Sky blue */}
-      </mesh>
-
-      {/* Robot Head - Sphere */}
-      <mesh position={[0, 0.2, 0]}>
-        <sphereGeometry args={[0.2, 32, 32]} />
-        <meshStandardMaterial color="#E0FFFF" /> {/* Light cyan */}
-      </mesh>
-
-      {/* Eyes - Small spheres for character */}
-      <mesh position={[-0.08, 0.22, 0.15]}>
-        <sphereGeometry args={[0.03, 16, 16]} />
-        <meshStandardMaterial color="#1E90FF" /> {/* Dodger blue */}
-      </mesh>
-      <mesh position={[0.08, 0.22, 0.15]}>
-        <sphereGeometry args={[0.03, 16, 16]} />
-        <meshStandardMaterial color="#1E90FF" /> {/* Dodger blue */}
-      </mesh>
-
-      {/* Arms - Small cylinders */}
-      <mesh position={[-0.22, -0.1, 0]} rotation={[0, 0, Math.PI / 4]}>
-        <cylinderGeometry args={[0.04, 0.04, 0.3, 16]} />
-        <meshStandardMaterial color="#87CEEB" />
-      </mesh>
-      <mesh position={[0.22, -0.1, 0]} rotation={[0, 0, -Math.PI / 4]}>
-        <cylinderGeometry args={[0.04, 0.04, 0.3, 16]} />
-        <meshStandardMaterial color="#87CEEB" />
-      </mesh>
-    </group>
+    <primitive
+      ref={robotRef}
+      object={scene}
+      position={position}
+      scale={scale}
+    />
   );
 }
+
+// Preload the model to avoid loading delays
+useGLTF.preload('/models/robot.glb');
 
 /**
  * SceneLighting - Configures ambient and directional lights
@@ -104,8 +84,11 @@ export default function Robot3DScene() {
         {/* Scene Lighting */}
         <SceneLighting />
 
-        {/* Robot Placeholder - positioned 2.75 meters in front of user */}
-        <RobotPlaceholder position={[0, 0, -2.75]} />
+        {/* Suspense boundary for async model loading */}
+        <Suspense fallback={null}>
+          {/* Robot Model - positioned 2.75 meters in front of user */}
+          <RobotModel position={[0, 0, -2.75]} scale={0.5} />
+        </Suspense>
 
         {/* Optional grid helper for spatial reference during development */}
         <gridHelper args={[10, 10, '#444444', '#222222']} position={[0, -0.5, 0]} />
