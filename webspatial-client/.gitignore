@@ -17,11 +17,6 @@ dist-ssr
 *.app
 *.ipa
 
-# Project management (not needed in bundle)
-apm
-README.md
-*.md
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
