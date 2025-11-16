@@ -10,7 +10,7 @@ import * as THREE from 'three';
  * Now loads the actual USDZ-converted GLB model.
  */
 
-const ROBOT_MODEL_PATH = `${import.meta.env.BASE_URL}models/robot.glb`.replace(/\/+/g, '/');
+const ROBOT_MODEL_PATH = '/models/robot.glb';
 
 interface RobotModelProps {
   position?: [number, number, number];
