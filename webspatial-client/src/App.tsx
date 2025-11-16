@@ -65,7 +65,7 @@ function AppContent() {
     >
       <Suspense fallback={null}>
         <XR referenceSpace="local-floor">
-          <color attach="background" args={['#05070f']} />
+          {/* No background color - allows Vision Pro passthrough */}
           <ambientLight intensity={0.6} />
           <directionalLight position={[2, 3, 2]} intensity={1} castShadow />
           <directionalLight position={[-2, 3, 1]} intensity={0.4} />
