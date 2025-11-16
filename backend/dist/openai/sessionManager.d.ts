@@ -15,10 +15,10 @@ export declare class OpenAISessionManager {
      */
     initialize(tone?: string): Promise<void>;
     /**
-     * Load persona instructions based on selected tone
-     * Maps tone selections to corresponding persona prompt files
+     * Load persona configuration based on selected tone
+     * Maps tone selections to persona prompt files, voices, and settings
      */
-    private loadPersona;
+    private loadPersonaConfig;
     /**
      * Step 4: Setup Response Event Handlers for OpenAI messages
      */

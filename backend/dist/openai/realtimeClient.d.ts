@@ -30,11 +30,13 @@ export declare class OpenAIRealtimeClient {
      */
     getConnectionStatus(): boolean;
     /**
-     * Configure session with persona instructions
+     * Configure session with persona instructions and voice
      * Step 2: Send Session Configuration
      * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
+     * @param voice - Optional voice selection for this persona
+     * @param temperature - Optional temperature for response variability
      */
-    configureSession(personaInstructions?: string): void;
+    configureSession(personaInstructions?: string, voice?: string, temperature?: number): void;
     /**
      * Send audio input to OpenAI
      * Step 3: Implement Audio Input Handler

@@ -166,13 +166,17 @@ class OpenAIRealtimeClient {
         return this.isConnected;
     }
     /**
-     * Configure session with persona instructions
+     * Configure session with persona instructions and voice
      * Step 2: Send Session Configuration
      * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
+     * @param voice - Optional voice selection for this persona
+     * @param temperature - Optional temperature for response variability
      */
-    configureSession(personaInstructions) {
+    configureSession(personaInstructions, voice, temperature) {
         try {
             let instructions;
+            let selectedVoice = voice || 'alloy';
+            let responseTemp = temperature || 0.8;
             if (personaInstructions) {
                 // Use provided persona instructions
                 instructions = personaInstructions.trim();
@@ -185,13 +189,14 @@ class OpenAIRealtimeClient {
                 console.log('Loading default therapist instructions from prompt file...');
             }
             console.log(`Instructions: ${instructions.substring(0, 100)}...`);
+            console.log(`Voice: ${selectedVoice}, Temperature: ${responseTemp}`);
             // Send session.update configuration
             const sessionConfig = {
                 type: 'session.update',
                 session: {
                     modalities: ['text', 'audio'],
                     instructions: instructions,
-                    voice: 'alloy',
+                    voice: selectedVoice,
                     input_audio_format: 'pcm16',
                     output_audio_format: 'pcm16',
                     input_audio_transcription: {
@@ -202,7 +207,9 @@ class OpenAIRealtimeClient {
                         threshold: 0.5,
                         prefix_padding_ms: 300,
                         silence_duration_ms: 200
-                    }
+                    },
+                    temperature: responseTemp,
+                    max_response_output_tokens: 4096
                 }
             };
             this.send(sessionConfig);

@@ -65,9 +65,9 @@ class OpenAISessionManager {
             // Connect to OpenAI
             await this.openaiClient.connect();
             // Load appropriate persona based on tone
-            const personaInstructions = this.loadPersona(tone);
-            // Configure session with persona prompt
-            this.openaiClient.configureSession(personaInstructions);
+            const { instructions, voice, temperature } = this.loadPersonaConfig(tone);
+            // Configure session with persona prompt, voice, and temperature
+            this.openaiClient.configureSession(instructions, voice, temperature);
             // Set up event handlers
             this.setupOpenAIEventHandlers();
             this.setupFrontendEventHandlers();
@@ -90,44 +90,57 @@ class OpenAISessionManager {
         }
     }
     /**
-     * Load persona instructions based on selected tone
-     * Maps tone selections to corresponding persona prompt files
+     * Load persona configuration based on selected tone
+     * Maps tone selections to persona prompt files, voices, and settings
      */
-    loadPersona(tone) {
+    loadPersonaConfig(tone) {
         try {
-            // Map tone to persona file
             let personaFile;
+            let voice;
+            let temperature;
             switch (tone?.toLowerCase()) {
                 case 'soft':
                 case 'friendly':
                     personaFile = 'persona_friendly.txt';
-                    console.log('Loading Best-Friend Companion persona...');
+                    voice = 'nova'; // Warm, friendly, upbeat voice
+                    temperature = 0.9; // High variability for natural casual conversation
+                    console.log('Loading Best-Friend Companion persona (nova voice, temp: 0.9)...');
                     break;
                 case 'analytical':
                     personaFile = 'persona_analytical.txt';
-                    console.log('Loading Analytical Companion persona...');
+                    voice = 'echo'; // Clear, measured, thoughtful voice
+                    temperature = 0.7; // More structured, less random
+                    console.log('Loading Analytical Companion persona (echo voice, temp: 0.7)...');
                     break;
                 case 'therapist':
                     personaFile = 'persona_therapist.txt';
-                    console.log('Loading Therapist-Style Companion persona...');
+                    voice = 'shimmer'; // Calm, soothing, therapeutic voice
+                    temperature = 0.75; // Balanced between structure and warmth
+                    console.log('Loading Therapist-Style Companion persona (shimmer voice, temp: 0.75)...');
                     break;
                 default:
                     // Default to friendly persona if no tone specified
                     personaFile = 'persona_friendly.txt';
+                    voice = 'nova';
+                    temperature = 0.9;
                     console.log('No tone specified - defaulting to Best-Friend Companion persona...');
             }
             // Load persona file
             const promptPath = path.join(__dirname, '../../prompts', personaFile);
             const instructions = fs.readFileSync(promptPath, 'utf-8');
             console.log(`✓ Loaded persona from ${personaFile}`);
-            return instructions;
+            return { instructions, voice, temperature };
         }
         catch (error) {
             console.error('Error loading persona file:', error);
             console.log('Falling back to friendly persona...');
             // Fallback to friendly persona
             const fallbackPath = path.join(__dirname, '../../prompts/persona_friendly.txt');
-            return fs.readFileSync(fallbackPath, 'utf-8');
+            return {
+                instructions: fs.readFileSync(fallbackPath, 'utf-8'),
+                voice: 'nova',
+                temperature: 0.9
+            };
         }
     }
     /**
