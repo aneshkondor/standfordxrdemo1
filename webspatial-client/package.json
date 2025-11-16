@@ -8,9 +8,9 @@
     "dev:avp": "XR_ENV=avp vite --port 3001",
     "build": "tsc -b && vite build",
     "build:avp": "XR_ENV=avp npm run build",
-    "run:avp": "webspatial-builder run --manifest=dist/manifest.json --project=dist --base=http://localhost:3001/webspatial/avp/ --platform=visionos --bundle-id=com.aila.therapy",
+    "run:avp": "webspatial-builder run --manifest=dist/webspatial/avp/manifest.json --project=dist/webspatial/avp --base=http://localhost:3001/webspatial/avp/ --platform=visionos --bundle-id=com.aila.therapy",
     "dev:simulator": "npm run build:avp && npm run run:avp",
-    "build:ipa": "npm run build:avp && webspatial-builder build --manifest=dist/manifest.json --project=dist --base=dist --platform=visionos --bundle-id=com.aila.therapy",
+    "build:ipa": "npm run build:avp && webspatial-builder build --manifest=dist/webspatial/avp/manifest.json --project=dist/webspatial/avp --base=dist/webspatial/avp --platform=visionos --bundle-id=com.aila.therapy",
     "lint": "eslint .",
     "preview": "vite preview"
   },
