@@ -5,10 +5,9 @@
 
 import { micCapture } from './micCapture';
 import { vad } from './vad';
-import websocketClient from '../api/websocketClient';
+import websocketClient, { type WebSocketClient, type WebSocketMessage } from '../api/websocketClient';
 import { therapyStateController } from '../app-shell/TherapyStateController';
-import { WebSocketClient, WebSocketMessage } from '../api/websocketClient';
-import { base64ToArrayBuffer, playAudioChunk } from './audioPlayback';
+import { base64ToArrayBuffer, playAudioChunk, stopAudioPlayback } from './audioPlayback';
 
 /**
  * =============================================================================
@@ -23,7 +22,6 @@ class AudioPipeline {
   private mediaStream: MediaStream | null = null;
   private commitDebounceTimer: number | null = null;
   private readonly COMMIT_DEBOUNCE_MS = 300; // 300ms silence before committing
-  private isInitialized = false;
 
   constructor() {
     // Step 5: Register therapy state change listener for automatic lifecycle management
@@ -50,8 +48,6 @@ class AudioPipeline {
         this.stopAudioPipeline();
       }
     });
-
-    this.isInitialized = true;
   }
 
   /**
@@ -158,6 +154,9 @@ class AudioPipeline {
     console.log(`[AudioPipeline] Speech ${isSpeaking ? 'started' : 'ended'}`);
 
     if (isSpeaking) {
+      stopAudioPlayback();
+      websocketClient.send({ type: 'response.cancel' });
+
       // Speech started - clear any pending commit timer
       if (this.commitDebounceTimer) {
         clearTimeout(this.commitDebounceTimer);
@@ -248,12 +247,14 @@ class AudioPipeline {
  * Audio Pipeline State
  * Tracks current playback state for UI coordination
  */
-export enum AudioPipelineState {
-  IDLE = 'idle',
-  RECEIVING = 'receiving',
-  PLAYING = 'playing',
-  COMPLETE = 'complete'
-}
+export const AudioPipelineState = {
+  IDLE: 'idle',
+  RECEIVING: 'receiving',
+  PLAYING: 'playing',
+  COMPLETE: 'complete'
+} as const;
+
+export type AudioPipelineState = typeof AudioPipelineState[keyof typeof AudioPipelineState];
 
 /**
  * UI Status Update Callback
@@ -302,6 +303,24 @@ export class InboundAudioPipeline {
       this.handleResponseDone(message);
     });
 
+    // Backend speech lifecycle signals
+    this.wsClient.onMessage('speech_started', () => {
+      console.log('[InboundAudioPipeline] Backend reported speech start');
+      this.setState(AudioPipelineState.PLAYING);
+      this.updateStatus('Robot is speaking...');
+    });
+
+    this.wsClient.onMessage('speech_stopped', () => {
+      console.log('[InboundAudioPipeline] Backend reported speech stop');
+      this.updateStatus('Therapist is responding...');
+    });
+
+    this.wsClient.onMessage('error', (message: WebSocketMessage) => {
+      console.warn('[InboundAudioPipeline] Backend error event:', message);
+      this.updateStatus('Audio pipeline error');
+      this.setState(AudioPipelineState.IDLE);
+    });
+
     console.log('[InboundAudioPipeline] Message handlers registered successfully');
   }
 
@@ -327,7 +346,9 @@ export class InboundAudioPipeline {
     console.log('[InboundAudioPipeline] Audio chunk received');
 
     // Step 2: Extract audio data from message payload
-    const base64Audio = message.payload?.audio;
+    const payloadAudio = (message.payload as { audio?: unknown } | undefined)?.audio;
+    const directAudio = (message as { audio?: unknown }).audio;
+    const base64Audio = (payloadAudio ?? directAudio) as string | undefined;
 
     if (!base64Audio) {
       console.warn('[InboundAudioPipeline] Audio chunk received but no audio data present');
@@ -474,8 +495,7 @@ export class InboundAudioPipeline {
 // Export outbound pipeline singleton
 export const audioPipeline = new AudioPipeline();
 
-// Export inbound pipeline class for instantiation
-export { InboundAudioPipeline };
+// InboundAudioPipeline is already exported at line 268
 
 // Default export is outbound pipeline
 export default audioPipeline;

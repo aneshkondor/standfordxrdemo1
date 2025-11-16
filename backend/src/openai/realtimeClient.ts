@@ -142,13 +142,17 @@ export class OpenAIRealtimeClient {
   }
 
   /**
-   * Configure session with persona instructions
+   * Configure session with persona instructions and voice
    * Step 2: Send Session Configuration
    * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
+   * @param voice - Optional voice selection for this persona
+   * @param temperature - Optional temperature for response variability
    */
-  public configureSession(personaInstructions?: string): void {
+  public configureSession(personaInstructions?: string, voice?: string, temperature?: number): void {
     try {
       let instructions: string;
+      let selectedVoice = voice || 'alloy';
+      let responseTemp = temperature || 0.8;
 
       if (personaInstructions) {
         // Use provided persona instructions
@@ -162,6 +166,7 @@ export class OpenAIRealtimeClient {
       }
 
       console.log(`Instructions: ${instructions.substring(0, 100)}...`);
+      console.log(`Voice: ${selectedVoice}, Temperature: ${responseTemp}`);
 
       // Send session.update configuration
       const sessionConfig = {
@@ -169,7 +174,7 @@ export class OpenAIRealtimeClient {
         session: {
           modalities: ['text', 'audio'],
           instructions: instructions,
-          voice: 'alloy',
+          voice: selectedVoice,
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: {
@@ -180,7 +185,9 @@ export class OpenAIRealtimeClient {
             threshold: 0.5,
             prefix_padding_ms: 300,
             silence_duration_ms: 200
-          }
+          },
+          temperature: responseTemp,
+          max_response_output_tokens: 4096
         }
       };
 
@@ -206,6 +213,39 @@ export class OpenAIRealtimeClient {
       this.send(message);
     } catch (error) {
       console.error('Error sending audio input:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Explicitly request the model to generate a response
+   * Useful when server-side VAD doesn't auto-trigger replies
+   */
+  public requestResponse(): void {
+    try {
+      const message = {
+        type: 'response.create'
+      };
+      this.send(message);
+      console.log('Requested new response from OpenAI');
+    } catch (error) {
+      console.error('Error requesting response:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel any actively generating response (used for barge-in)
+   */
+  public cancelResponse(): void {
+    try {
+      const message = {
+        type: 'response.cancel'
+      };
+      this.send(message);
+      console.log('Requested cancellation of active response');
+    } catch (error) {
+      console.error('Error cancelling response:', error);
       throw error;
     }
   }

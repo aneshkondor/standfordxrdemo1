@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import http from 'http';
 import { AudioStreamingWebSocketServer } from './websocketServer';
 import sessionRouter from './routes/session';
@@ -8,6 +10,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174'], // Vite dev server
+  credentials: true
+}));
 app.use(express.json());
 
 // Register routes

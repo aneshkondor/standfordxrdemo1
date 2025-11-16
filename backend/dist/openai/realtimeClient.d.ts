@@ -30,15 +30,25 @@ export declare class OpenAIRealtimeClient {
      */
     getConnectionStatus(): boolean;
     /**
-     * Configure session with therapist instructions
+     * Configure session with persona instructions
      * Step 2: Send Session Configuration
+     * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
      */
-    configureSession(): void;
+    configureSession(personaInstructions?: string): void;
     /**
      * Send audio input to OpenAI
      * Step 3: Implement Audio Input Handler
      */
     sendAudioInput(audioData: string): void;
+    /**
+     * Explicitly request the model to generate a response
+     * Useful when server-side VAD doesn't auto-trigger replies
+     */
+    requestResponse(): void;
+    /**
+     * Cancel any actively generating response (used for barge-in)
+     */
+    cancelResponse(): void;
     /**
      * Commit audio buffer (optional - triggers response if not using VAD)
      */

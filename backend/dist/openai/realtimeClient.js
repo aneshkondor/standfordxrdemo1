@@ -166,15 +166,24 @@ class OpenAIRealtimeClient {
         return this.isConnected;
     }
     /**
-     * Configure session with therapist instructions
+     * Configure session with persona instructions
      * Step 2: Send Session Configuration
+     * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
      */
-    configureSession() {
+    configureSession(personaInstructions) {
         try {
-            // Load therapist instructions from prompt file
-            const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
-            const instructions = fs.readFileSync(promptPath, 'utf-8').trim();
-            console.log('Loading therapist instructions from prompt file...');
+            let instructions;
+            if (personaInstructions) {
+                // Use provided persona instructions
+                instructions = personaInstructions.trim();
+                console.log('Using provided persona instructions...');
+            }
+            else {
+                // Fallback to default therapist prompt
+                const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
+                instructions = fs.readFileSync(promptPath, 'utf-8').trim();
+                console.log('Loading default therapist instructions from prompt file...');
+            }
             console.log(`Instructions: ${instructions.substring(0, 100)}...`);
             // Send session.update configuration
             const sessionConfig = {
@@ -218,6 +227,39 @@ class OpenAIRealtimeClient {
         }
         catch (error) {
             console.error('Error sending audio input:', error);
+            throw error;
+        }
+    }
+    /**
+     * Explicitly request the model to generate a response
+     * Useful when server-side VAD doesn't auto-trigger replies
+     */
+    requestResponse() {
+        try {
+            const message = {
+                type: 'response.create'
+            };
+            this.send(message);
+            console.log('Requested new response from OpenAI');
+        }
+        catch (error) {
+            console.error('Error requesting response:', error);
+            throw error;
+        }
+    }
+    /**
+     * Cancel any actively generating response (used for barge-in)
+     */
+    cancelResponse() {
+        try {
+            const message = {
+                type: 'response.cancel'
+            };
+            this.send(message);
+            console.log('Requested cancellation of active response');
+        }
+        catch (error) {
+            console.error('Error cancelling response:', error);
             throw error;
         }
     }

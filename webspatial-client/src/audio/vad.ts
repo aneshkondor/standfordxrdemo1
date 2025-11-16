@@ -80,6 +80,9 @@ export class VoiceActivityDetector {
   private speechStartTime: number = 0;
   private speechEndTime: number = 0;
   private updateIntervalId: number | null = null;
+  private analysisFrameCount: number = 0;
+  private speechBandNoiseFloor: number = 0;
+  private noiseBandNoiseFloor: number = 0;
 
   // Calibration data
   private noiseFloorRMS: number = 0;
@@ -158,6 +161,9 @@ export class VoiceActivityDetector {
       // Start calibration
       this.state = VADState.CALIBRATING;
       this.calibrationSamples = 0;
+      this.analysisFrameCount = 0;
+      this.speechBandNoiseFloor = 0;
+      this.noiseBandNoiseFloor = 0;
 
       // Start analysis loop
       this.updateIntervalId = window.setInterval(
@@ -207,6 +213,9 @@ export class VoiceActivityDetector {
 
     this.state = VADState.STOPPED;
     this.isSpeaking = false;
+    this.analysisFrameCount = 0;
+    this.speechBandNoiseFloor = 0;
+    this.noiseBandNoiseFloor = 0;
 
     console.log('VAD stopped');
   }
@@ -249,7 +258,21 @@ export class VoiceActivityDetector {
    */
   private analyzeAudio(): void {
     if (!this.analyserNode || !this.timeDomainData || !this.frequencyData) {
+      console.warn('[VAD] analyzeAudio called but missing nodes:', {
+        analyserNode: !!this.analyserNode,
+        timeDomainData: !!this.timeDomainData,
+        frequencyData: !!this.frequencyData
+      });
       return;
+    }
+
+    this.analysisFrameCount++;
+    const logEveryFrames = Math.max(1, Math.round(1000 / this.config.updateInterval));
+    const shouldLog = this.analysisFrameCount % logEveryFrames === 0;
+
+    // Debug: log that we're analyzing
+    if (shouldLog) {
+      console.log('[VAD] analyzeAudio() called, state:', this.state);
     }
 
     // Get audio data
@@ -272,6 +295,15 @@ export class VoiceActivityDetector {
       this.config.noiseBandRange[1]
     );
 
+    const speechBandBaseline = this.speechBandNoiseFloor;
+    const noiseBandBaseline = this.noiseBandNoiseFloor;
+    const speechBoost = speechBandBaseline > 0
+      ? speechBandEnergy / speechBandBaseline
+      : speechBandEnergy;
+    const lowBandBoost = noiseBandBaseline > 0
+      ? noiseBandEnergy / noiseBandBaseline
+      : noiseBandEnergy;
+
     // Handle calibration phase
     if (this.state === VADState.CALIBRATING) {
       this.updateCalibration(rms, this.frequencyData);
@@ -280,12 +312,24 @@ export class VoiceActivityDetector {
 
     // Hybrid detection logic: RMS + Frequency analysis
     const rmsAboveThreshold = rms > this.config.rmsThreshold;
-    const speechToNoiseRatio = noiseBandEnergy > 0
-      ? speechBandEnergy / noiseBandEnergy
-      : speechBandEnergy;
-    const frequencyIndicatesSpeech = speechToNoiseRatio > this.config.speechBandSNR;
+    const frequencyIndicatesSpeech =
+      speechBoost > this.config.speechBandSNR ||
+      (speechBandEnergy > noiseBandEnergy && speechBoost > 1.2);
 
-    const voiceDetected = rmsAboveThreshold && frequencyIndicatesSpeech;
+    const voiceDetected =
+      (rmsAboveThreshold && frequencyIndicatesSpeech) ||
+      (speechBoost > this.config.speechBandSNR * 1.5 && rms > this.config.rmsThreshold * 0.7);
+
+    // Debug logging every 30 frames (~1 second at 30fps)
+    if (shouldLog) {
+      const threshold = this.config.rmsThreshold;
+      const speechBaselineLog = speechBandBaseline || speechBandEnergy;
+      console.log(
+        `[VAD] RMS: ${rms.toFixed(4)} (thresh: ${threshold.toFixed(4)}), ` +
+        `SpeechBand: ${speechBandEnergy.toFixed(4)} (noiseRef: ${speechBaselineLog.toFixed(4)}, boost: ${speechBoost.toFixed(2)}), ` +
+        `LowBandSNR: ${lowBandBoost.toFixed(2)}, Voice: ${voiceDetected}`
+      );
+    }
 
     // State machine with debouncing
     const now = Date.now();
@@ -397,12 +441,22 @@ export class VoiceActivityDetector {
       }
 
       // Set dynamic threshold based on noise floor
-      const dynamicThreshold = Math.max(
-        this.config.rmsThreshold,
-        this.noiseFloorRMS * 2.5 // 2.5x noise floor
+      const minThreshold = 0.02;
+      const maxThreshold = 0.12;
+      const dynamicThreshold = Math.min(
+        maxThreshold,
+        Math.max(this.config.rmsThreshold, minThreshold, this.noiseFloorRMS * 1.8)
       );
 
       this.config.rmsThreshold = dynamicThreshold;
+      this.speechBandNoiseFloor = this.calculateCalibratedBandEnergy(
+        this.config.speechBandRange[0],
+        this.config.speechBandRange[1]
+      );
+      this.noiseBandNoiseFloor = this.calculateCalibratedBandEnergy(
+        this.config.noiseBandRange[0],
+        this.config.noiseBandRange[1]
+      );
 
       this.state = VADState.DETECTING;
       console.log(`VAD calibration complete. Noise floor RMS: ${this.noiseFloorRMS.toFixed(4)}, Threshold: ${dynamicThreshold.toFixed(4)}`);
@@ -415,6 +469,50 @@ export class VoiceActivityDetector {
   private handleError(error: Error): void {
     console.error('VAD Error:', error);
     this.callbacks.onError?.(error);
+  }
+
+  private calculateCalibratedBandEnergy(minFreq: number, maxFreq: number): number {
+    if (!this.noiseFloorFrequency || !this.analyserNode) return 0;
+
+    const nyquist = this.config.sampleRate / 2;
+    const binCount = this.noiseFloorFrequency.length;
+    const minBin = Math.floor((minFreq / nyquist) * binCount);
+    const maxBin = Math.ceil((maxFreq / nyquist) * binCount);
+    let sum = 0;
+    let count = 0;
+
+    for (let i = minBin; i < maxBin && i < binCount; i++) {
+      sum += this.noiseFloorFrequency[i] / 255;
+      count++;
+    }
+
+    return count > 0 ? sum / count : 0;
+  }
+
+  /**
+   * Wrapper methods for audioPipeline compatibility
+   */
+
+  onSpeechDetected(callback: (isSpeaking: boolean) => void): void {
+    const originalStart = this.callbacks.onSpeechStart;
+    const originalEnd = this.callbacks.onSpeechEnd;
+
+    this.callbacks.onSpeechStart = () => {
+      originalStart?.();
+      callback(true);
+    };
+
+    this.callbacks.onSpeechEnd = () => {
+      originalEnd?.();
+      callback(false);
+    };
+  }
+
+  offSpeechDetected(_callback: (isSpeaking: boolean) => void): void {
+    // Reset callbacks - this is a simple implementation
+    // In production, you'd want to track and remove specific callbacks
+    this.callbacks.onSpeechStart = undefined;
+    this.callbacks.onSpeechEnd = undefined;
   }
 }
 
@@ -429,6 +527,11 @@ export function createVAD(
 }
 
 /**
+ * Singleton instance for application-wide voice activity detection
+ */
+export const vad = new VoiceActivityDetector();
+
+/**
  * Default export
  */
-export default VoiceActivityDetector;
+export default vad;

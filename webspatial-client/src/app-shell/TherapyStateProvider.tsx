@@ -4,7 +4,7 @@
  * React component that provides therapy state management to the application
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   TherapyState,
   type TherapyTone,
@@ -12,8 +12,10 @@ import {
   TherapyStateContext,
   type TherapyStateContextType,
   DEFAULT_SESSION,
+  therapyStateController,
 } from './TherapyStateController';
 import { startSession, type SessionApiError } from '../api/sessionApi';
+import websocketClient from '../api/websocketClient';
 
 /**
  * Therapy State Provider Props
@@ -29,6 +31,11 @@ interface TherapyStateProviderProps {
 export const TherapyStateProvider: React.FC<TherapyStateProviderProps> = ({ children }) => {
   const [currentState, setCurrentState] = useState<TherapyState>(TherapyState.IDLE);
   const [session, setSession] = useState<TherapySession>(DEFAULT_SESSION);
+
+  // Sync React state with singleton controller for audio pipeline
+  useEffect(() => {
+    therapyStateController.setState(currentState);
+  }, [currentState]);
 
   /**
    * Start a therapy session with the selected tone
@@ -48,6 +55,43 @@ export const TherapyStateProvider: React.FC<TherapyStateProviderProps> = ({ chil
       console.log(`  - Applied Tone: ${response.appliedTone}`);
       console.log(`  - Memory Narrative: ${response.memoryNarrative}`);
 
+      // Connect to WebSocket for real-time audio communication
+      if (!websocketClient.isConnected()) {
+        console.log('[TherapyStateProvider] Connecting to WebSocket...');
+
+        // Register one-time handlers before connecting
+        let onOpenHandler: (() => void) | null = null;
+        let onErrorHandler: ((error: Event) => void) | null = null;
+
+        const connectionPromise = new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('WebSocket connection timeout'));
+          }, 5000);
+
+          onOpenHandler = () => {
+            clearTimeout(timeout);
+            console.log('[TherapyStateProvider] WebSocket connected successfully');
+            resolve();
+          };
+
+          onErrorHandler = (error) => {
+            clearTimeout(timeout);
+            console.error('[TherapyStateProvider] WebSocket connection error:', error);
+            reject(error);
+          };
+
+          websocketClient.onOpen(onOpenHandler);
+          websocketClient.onError(onErrorHandler);
+        });
+
+        websocketClient.connect();
+        await connectionPromise;
+
+        console.log('[TherapyStateProvider] WebSocket connection established, ready for audio');
+      } else {
+        console.log('[TherapyStateProvider] WebSocket already connected');
+      }
+
       // Update local session state
       setSession({
         tone,
@@ -56,6 +100,7 @@ export const TherapyStateProvider: React.FC<TherapyStateProviderProps> = ({ chil
       });
 
       // Transition to active therapy state
+      // This will trigger the audio pipeline to start automatically
       setCurrentState(TherapyState.ACTIVE_THERAPY);
 
     } catch (error) {
@@ -87,6 +132,15 @@ export const TherapyStateProvider: React.FC<TherapyStateProviderProps> = ({ chil
    * Exit therapy and return to idle state
    */
   const exitTherapy = useCallback(() => {
+    console.log('[TherapyStateProvider] Exiting therapy session');
+
+    // Disconnect WebSocket
+    if (websocketClient.isConnected()) {
+      console.log('[TherapyStateProvider] Disconnecting WebSocket...');
+      websocketClient.disconnect();
+    }
+
+    // Reset state
     setCurrentState(TherapyState.IDLE);
     setSession(DEFAULT_SESSION);
   }, []);

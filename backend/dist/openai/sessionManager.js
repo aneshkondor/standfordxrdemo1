@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -6,6 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OpenAISessionManager = void 0;
 const ws_1 = __importDefault(require("ws"));
 const realtimeClient_1 = require("./realtimeClient");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 /**
  * Session Manager - Bridges frontend WebSocket and OpenAI Realtime API
  * Handles Steps 4-6: Response Event Handlers, Audio Extraction, Error Handling
@@ -14,20 +49,25 @@ class OpenAISessionManager {
     openaiClient;
     frontendWs;
     isSessionActive = false;
+    hasActiveResponse = false;
     constructor(frontendWs) {
         this.frontendWs = frontendWs;
         this.openaiClient = new realtimeClient_1.OpenAIRealtimeClient();
     }
     /**
      * Initialize the OpenAI session
+     * @param tone - The selected AI tone/persona ('soft', 'friendly', 'analytical', 'therapist')
      */
-    async initialize() {
+    async initialize(tone) {
         try {
             console.log('Initializing OpenAI session...');
+            console.log(`Selected tone: ${tone || 'default (therapist)'}`);
             // Connect to OpenAI
             await this.openaiClient.connect();
-            // Configure session with therapist prompt
-            this.openaiClient.configureSession();
+            // Load appropriate persona based on tone
+            const personaInstructions = this.loadPersona(tone);
+            // Configure session with persona prompt
+            this.openaiClient.configureSession(personaInstructions);
             // Set up event handlers
             this.setupOpenAIEventHandlers();
             this.setupFrontendEventHandlers();
@@ -47,6 +87,47 @@ class OpenAISessionManager {
                 error: error instanceof Error ? error.message : 'Unknown error'
             });
             throw error;
+        }
+    }
+    /**
+     * Load persona instructions based on selected tone
+     * Maps tone selections to corresponding persona prompt files
+     */
+    loadPersona(tone) {
+        try {
+            // Map tone to persona file
+            let personaFile;
+            switch (tone?.toLowerCase()) {
+                case 'soft':
+                case 'friendly':
+                    personaFile = 'persona_friendly.txt';
+                    console.log('Loading Best-Friend Companion persona...');
+                    break;
+                case 'analytical':
+                    personaFile = 'persona_analytical.txt';
+                    console.log('Loading Analytical Companion persona...');
+                    break;
+                case 'therapist':
+                    personaFile = 'persona_therapist.txt';
+                    console.log('Loading Therapist-Style Companion persona...');
+                    break;
+                default:
+                    // Default to friendly persona if no tone specified
+                    personaFile = 'persona_friendly.txt';
+                    console.log('No tone specified - defaulting to Best-Friend Companion persona...');
+            }
+            // Load persona file
+            const promptPath = path.join(__dirname, '../../prompts', personaFile);
+            const instructions = fs.readFileSync(promptPath, 'utf-8');
+            console.log(`✓ Loaded persona from ${personaFile}`);
+            return instructions;
+        }
+        catch (error) {
+            console.error('Error loading persona file:', error);
+            console.log('Falling back to friendly persona...');
+            // Fallback to friendly persona
+            const fallbackPath = path.join(__dirname, '../../prompts/persona_friendly.txt');
+            return fs.readFileSync(fallbackPath, 'utf-8');
         }
     }
     /**
@@ -79,9 +160,14 @@ class OpenAISessionManager {
                         break;
                     case 'input_audio_buffer.committed':
                         console.log('✓ Audio buffer committed');
+                        if (this.hasActiveResponse) {
+                            this.cancelActiveResponse();
+                        }
+                        this.openaiClient.requestResponse();
                         break;
                     case 'conversation.item.created':
                         console.log('💬 AI is generating response...');
+                        this.hasActiveResponse = true;
                         this.sendToFrontend({
                             type: 'response_started',
                             message: 'Therapist is responding...'
@@ -106,6 +192,7 @@ class OpenAISessionManager {
                         break;
                     case 'response.done':
                         console.log('✓ Response completed');
+                        this.hasActiveResponse = false;
                         this.sendToFrontend({
                             type: 'response_done',
                             message: 'Ready to listen'
@@ -162,19 +249,32 @@ class OpenAISessionManager {
                 const data = JSON.parse(message.toString());
                 console.log(`[Frontend] Received: ${data.type}`);
                 switch (data.type) {
+                    // Handle OpenAI Realtime API format (from frontend)
+                    case 'input_audio_buffer.append':
+                        if (data.audio) {
+                            console.log(`📤 Forwarding audio chunk to OpenAI (~${data.audio.length} chars base64)`);
+                            this.openaiClient.sendAudioInput(data.audio);
+                        }
+                        break;
+                    case 'input_audio_buffer.commit':
+                        console.log('📤 Committing audio buffer to OpenAI');
+                        this.openaiClient.commitAudioBuffer();
+                        break;
+                    // Legacy format support
                     case 'audio_input':
-                        // Step 3: Forward audio input to OpenAI
                         if (data.audio) {
                             this.openaiClient.sendAudioInput(data.audio);
                         }
                         break;
                     case 'stop_audio':
-                        // Clear audio buffer
                         this.openaiClient.clearAudioBuffer();
                         break;
                     case 'commit_audio':
-                        // Manually commit audio (if not using VAD)
                         this.openaiClient.commitAudioBuffer();
+                        break;
+                    case 'response.cancel':
+                        console.log('Frontend requested response cancellation');
+                        this.cancelActiveResponse();
                         break;
                     default:
                         console.warn(`[Frontend] Unhandled message type: ${data.type}`);
@@ -192,6 +292,18 @@ class OpenAISessionManager {
         this.frontendWs.on('error', (error) => {
             console.error('Frontend WebSocket error:', error);
             this.cleanup();
+        });
+    }
+    cancelActiveResponse() {
+        if (!this.hasActiveResponse) {
+            return;
+        }
+        console.log('Cancelling active OpenAI response due to barge-in');
+        this.openaiClient.cancelResponse();
+        this.hasActiveResponse = false;
+        this.sendToFrontend({
+            type: 'response_cancelled',
+            message: 'Therapist paused to listen'
         });
     }
     /**

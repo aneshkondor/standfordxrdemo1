@@ -12,11 +12,16 @@ export interface WebSocketMessage {
 export declare class AudioStreamingWebSocketServer {
     private wss;
     private clients;
+    private sessions;
     constructor(server: http.Server);
     /**
      * Initialize WebSocket server and set up event listeners
      */
     initialize(): void;
+    /**
+     * Generate unique client ID
+     */
+    private generateClientId;
     /**
      * Get the WebSocket server instance
      */

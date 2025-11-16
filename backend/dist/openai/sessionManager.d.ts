@@ -7,11 +7,18 @@ export declare class OpenAISessionManager {
     private openaiClient;
     private frontendWs;
     private isSessionActive;
+    private hasActiveResponse;
     constructor(frontendWs: WebSocket);
     /**
      * Initialize the OpenAI session
+     * @param tone - The selected AI tone/persona ('soft', 'friendly', 'analytical', 'therapist')
      */
-    initialize(): Promise<void>;
+    initialize(tone?: string): Promise<void>;
+    /**
+     * Load persona instructions based on selected tone
+     * Maps tone selections to corresponding persona prompt files
+     */
+    private loadPersona;
     /**
      * Step 4: Setup Response Event Handlers for OpenAI messages
      */
@@ -24,6 +31,7 @@ export declare class OpenAISessionManager {
      * Setup Frontend WebSocket Event Handlers
      */
     private setupFrontendEventHandlers;
+    private cancelActiveResponse;
     /**
      * Step 6: Handle OpenAI API Errors
      */
