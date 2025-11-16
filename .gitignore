@@ -1,0 +1,21 @@
+# Environment variables
+.env
+backend/.env
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Project management (not needed)
+apm/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+.config/

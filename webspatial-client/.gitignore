@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# WebSpatial builder
+.webspatial-builder-temp
+*.app
+*.ipa
+
+# Project management (not needed in repo)
+apm/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
