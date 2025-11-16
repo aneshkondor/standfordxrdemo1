@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useMemo, useRef } from 'react';
 import { Environment, useGLTF } from '@react-three/drei';
 import type { Group } from 'three';
 
@@ -6,36 +6,6 @@ import { getSpatialPose } from '../../xr/SpatialLayout';
 import { useSpatialAudioAnchor } from '../../xr/spatialAudio';
 
 const robotPose = getSpatialPose('robot');
-const USDZ_PATH = '/models/ILA_Chatbot_1116011010_texture.usdz';
-
-function useUsdModel() {
-  const [usdModel, setUsdModel] = useState<Group | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadUsd() {
-      try {
-        const { USDZLoader } = await import('three/examples/jsm/loaders/USDZLoader.js');
-        const loader = new USDZLoader();
-        const model = await loader.loadAsync(USDZ_PATH);
-        if (isMounted) {
-          setUsdModel(model);
-        }
-      } catch (error) {
-        console.warn('[ImmersiveRobot] USDZ model load failed, using GLB fallback', error);
-      }
-    }
-
-    void loadUsd();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  return usdModel;
-}
 
 interface ImmersiveRobotProps {
   visible: boolean;
@@ -43,15 +13,13 @@ interface ImmersiveRobotProps {
 
 export default function ImmersiveRobot({ visible }: ImmersiveRobotProps) {
   const groupRef = useRef<Group | null>(null);
-  const usdModel = useUsdModel();
   const gltf = useGLTF('/models/robot.glb') as { scene: Group };
 
   useSpatialAudioAnchor(groupRef, { refDistance: 2.2 });
 
   const robotScene = useMemo(() => {
-    const source = usdModel ?? gltf?.scene;
-    return source ? source.clone() : null;
-  }, [usdModel, gltf]);
+    return gltf?.scene ? gltf.scene.clone() : null;
+  }, [gltf]);
 
   if (!visible || !robotScene) {
     return null;
