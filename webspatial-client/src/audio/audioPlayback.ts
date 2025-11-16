@@ -9,9 +9,11 @@
 
 // AudioContext for playback - initialized lazily
 let audioPlayer: AudioContext | null = null;
+let customDestination: AudioNode | null = null;
 
 // Track the next scheduled play time to ensure seamless playback
 let nextPlayTime = 0;
+const activeSources = new Set<AudioBufferSourceNode>();
 
 /**
  * Initialize the audio playback context
@@ -60,6 +62,51 @@ export function resetAudioPlayback(): void {
         nextPlayTime = 0;
         console.log('Audio playback context reset');
     }
+    customDestination = null;
+}
+
+/**
+ * Stop all scheduled audio playback immediately
+ * Used for barge-in scenarios so the user can interrupt the AI
+ */
+export function stopAudioPlayback(): void {
+    if (!audioPlayer) {
+        return;
+    }
+
+    activeSources.forEach(source => {
+        try {
+            source.stop();
+        } catch (error) {
+            console.warn('Error stopping audio source:', error);
+        }
+    });
+
+    activeSources.clear();
+    nextPlayTime = audioPlayer.currentTime;
+    console.log('Audio playback stopped and queue cleared');
+}
+
+function resolveDestination(context: AudioContext): AudioNode {
+    if (customDestination && customDestination.context !== context) {
+        console.warn('[AudioPlayback] Custom destination uses different AudioContext, ignoring spatial routing');
+        return context.destination;
+    }
+    return customDestination ?? context.destination;
+}
+
+/**
+ * Allow callers (e.g., XR spatial audio bridge) to route playback through a custom node.
+ */
+export function setAudioOutputNode(node: AudioNode | null): void {
+    customDestination = node;
+}
+
+/**
+ * Returns currently attached custom audio destination node (if any).
+ */
+export function getAudioOutputNode(): AudioNode | null {
+    return customDestination;
 }
 
 /**
@@ -114,7 +161,12 @@ export async function playAudioChunk(audioData: ArrayBuffer): Promise<void> {
     // Create buffer source
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(context.destination);
+    const destination = resolveDestination(context);
+    source.connect(destination);
+    activeSources.add(source);
+    source.onended = () => {
+        activeSources.delete(source);
+    };
 
     // Schedule playback for seamless continuity
     const currentTime = context.currentTime;

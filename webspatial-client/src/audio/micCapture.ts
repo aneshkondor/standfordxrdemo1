@@ -61,10 +61,56 @@ export class MicrophoneCapture {
       console.log('Microphone access granted');
       this.isCapturing = true;
 
-      // Steps 2-4 will be implemented in subsequent exchanges
-      // TODO: Create AudioContext pipeline
-      // TODO: Implement AudioWorklet processor
-      // TODO: Convert and emit audio chunks
+      // Step 2: Create AudioContext with specified sample rate
+      this.audioContext = new AudioContext({
+        sampleRate: this.config.sampleRate,
+      });
+
+      console.log(`AudioContext created with sample rate: ${this.audioContext.sampleRate}Hz`);
+
+      // Step 3: Create audio processing pipeline using ScriptProcessorNode
+      // Note: ScriptProcessorNode is deprecated but more compatible than AudioWorkletNode
+      // Buffer size: 4096 samples provides good balance between latency and processing
+      const bufferSize = 4096;
+      const scriptNode = this.audioContext.createScriptProcessor(
+        bufferSize,
+        this.config.channelCount,
+        this.config.channelCount
+      );
+
+      // Create source from media stream
+      const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+
+      // Connect: source → processor → destination (for monitoring, optional)
+      source.connect(scriptNode);
+      scriptNode.connect(this.audioContext.destination);
+
+      // Step 4: Process audio and emit chunks
+      scriptNode.onaudioprocess = (event: AudioProcessingEvent) => {
+        if (!this.isCapturing || !this.config.onAudioChunk) {
+          return;
+        }
+
+        // Get audio data from first channel
+        const inputBuffer = event.inputBuffer;
+        const channelData = inputBuffer.getChannelData(0); // Float32Array [-1, 1]
+
+        // Convert Float32 to Int16 (PCM16 format expected by OpenAI)
+        const int16Array = new Int16Array(channelData.length);
+        for (let i = 0; i < channelData.length; i++) {
+          // Clamp to [-1, 1] and convert to 16-bit integer range [-32768, 32767]
+          const sample = Math.max(-1, Math.min(1, channelData[i]));
+          int16Array[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        }
+
+        // Emit audio chunk
+        this.config.onAudioChunk(int16Array);
+      };
+
+      // Store reference for cleanup
+      this.workletNode = scriptNode as any;
+
+      console.log('Audio processing pipeline initialized and capturing audio chunks');
 
     } catch (error) {
       const micError = error instanceof Error
@@ -138,4 +184,40 @@ export class MicrophoneCapture {
   getMediaStream(): MediaStream | null {
     return this.mediaStream;
   }
+
+  /**
+   * Wrapper methods for audioPipeline compatibility
+   */
+
+  async startCapture(): Promise<MediaStream> {
+    await this.start();
+    if (!this.mediaStream) {
+      throw new Error('Failed to start microphone capture');
+    }
+    return this.mediaStream;
+  }
+
+  stopCapture(): void {
+    this.stop();
+  }
+
+  onAudioChunk(callback: (chunk: Int16Array) => void): void {
+    this.config.onAudioChunk = callback;
+  }
+
+  offAudioChunk(callback: (chunk: Int16Array) => void): void {
+    if (this.config.onAudioChunk === callback) {
+      this.config.onAudioChunk = undefined;
+    }
+  }
 }
+
+/**
+ * Singleton instance for application-wide microphone capture
+ */
+export const micCapture = new MicrophoneCapture();
+
+/**
+ * Default export
+ */
+export default micCapture;

@@ -1,4 +1,6 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import cors, { CorsOptions } from 'cors';
 import http from 'http';
 import { AudioStreamingWebSocketServer } from './websocketServer';
 import sessionRouter from './routes/session';
@@ -7,7 +9,41 @@ import { OpenAISessionManager } from './openai/sessionManager';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174'
+];
+
+const envOrigins = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const allowAllOrigins = process.env.CORS_ALLOW_ALL === 'true';
+
+const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...envOrigins]);
+const localNetworkPattern = /^https?:\/\/((10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(192\.168\.\d{1,3}\.\d{1,3})|(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}))/;
+
+const corsOptions: CorsOptions = {
+  origin(origin, callback) {
+    if (allowAllOrigins || !origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.has(origin) || localNetworkPattern.test(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+};
+
 // Middleware
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Register routes

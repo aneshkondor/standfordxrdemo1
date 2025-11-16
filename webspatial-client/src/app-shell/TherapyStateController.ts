@@ -114,3 +114,70 @@ export const getComponentVisibility = (state: TherapyState) => {
     audioActive: state === TherapyState.ACTIVE_THERAPY,
   };
 };
+
+/**
+ * Therapy State Controller Singleton
+ * Manages state change notifications for audio pipeline and other subscribers
+ */
+class TherapyStateControllerClass {
+  private currentState: TherapyState = TherapyState.IDLE;
+  private listeners: Array<(newState: TherapyState, oldState: TherapyState) => void> = [];
+
+  /**
+   * Update current state and notify listeners
+   */
+  public setState(newState: TherapyState): void {
+    const oldState = this.currentState;
+    if (oldState !== newState) {
+      this.currentState = newState;
+      this.notifyListeners(newState, oldState);
+    }
+  }
+
+  /**
+   * Get current state
+   */
+  public getState(): TherapyState {
+    return this.currentState;
+  }
+
+  /**
+   * Check if therapy is currently active
+   */
+  public isActive(): boolean {
+    return this.currentState === TherapyState.ACTIVE_THERAPY;
+  }
+
+  /**
+   * Register a state change listener
+   */
+  public onStateChange(callback: (newState: TherapyState, oldState: TherapyState) => void): void {
+    this.listeners.push(callback);
+  }
+
+  /**
+   * Remove a state change listener
+   */
+  public offStateChange(callback: (newState: TherapyState, oldState: TherapyState) => void): void {
+    this.listeners = this.listeners.filter(listener => listener !== callback);
+  }
+
+  /**
+   * Notify all listeners of state change
+   */
+  private notifyListeners(newState: TherapyState, oldState: TherapyState): void {
+    this.listeners.forEach(listener => {
+      try {
+        listener(newState, oldState);
+      } catch (error) {
+        console.error('[TherapyStateController] Error in state change listener:', error);
+      }
+    });
+  }
+}
+
+/**
+ * Singleton instance of the therapy state controller
+ * Used by audio pipeline and other systems that need to react to state changes
+ */
+export const therapyStateController = new TherapyStateControllerClass();

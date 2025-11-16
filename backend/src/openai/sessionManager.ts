@@ -11,6 +11,7 @@ export class OpenAISessionManager {
   private openaiClient: OpenAIRealtimeClient;
   private frontendWs: WebSocket;
   private isSessionActive: boolean = false;
+  private hasActiveResponse: boolean = false;
 
   constructor(frontendWs: WebSocket) {
     this.frontendWs = frontendWs;
@@ -30,10 +31,10 @@ export class OpenAISessionManager {
       await this.openaiClient.connect();
 
       // Load appropriate persona based on tone
-      const personaInstructions = this.loadPersona(tone);
+      const { instructions, voice, temperature } = this.loadPersonaConfig(tone);
 
-      // Configure session with persona prompt
-      this.openaiClient.configureSession(personaInstructions);
+      // Configure session with persona prompt, voice, and temperature
+      this.openaiClient.configureSession(instructions, voice, temperature);
 
       // Set up event handlers
       this.setupOpenAIEventHandlers();
@@ -60,34 +61,43 @@ export class OpenAISessionManager {
   }
 
   /**
-   * Load persona instructions based on selected tone
-   * Maps tone selections to corresponding persona prompt files
+   * Load persona configuration based on selected tone
+   * Maps tone selections to persona prompt files, voices, and settings
    */
-  private loadPersona(tone?: string): string {
+  private loadPersonaConfig(tone?: string): { instructions: string; voice: string; temperature: number } {
     try {
-      // Map tone to persona file
       let personaFile: string;
+      let voice: string;
+      let temperature: number;
 
       switch (tone?.toLowerCase()) {
         case 'soft':
         case 'friendly':
           personaFile = 'persona_friendly.txt';
-          console.log('Loading Best-Friend Companion persona...');
+          voice = 'nova'; // Warm, friendly, upbeat voice
+          temperature = 0.9; // High variability for natural casual conversation
+          console.log('Loading Best-Friend Companion persona (nova voice, temp: 0.9)...');
           break;
 
         case 'analytical':
           personaFile = 'persona_analytical.txt';
-          console.log('Loading Analytical Companion persona...');
+          voice = 'echo'; // Clear, measured, thoughtful voice
+          temperature = 0.7; // More structured, less random
+          console.log('Loading Analytical Companion persona (echo voice, temp: 0.7)...');
           break;
 
         case 'therapist':
           personaFile = 'persona_therapist.txt';
-          console.log('Loading Therapist-Style Companion persona...');
+          voice = 'shimmer'; // Calm, soothing, therapeutic voice
+          temperature = 0.75; // Balanced between structure and warmth
+          console.log('Loading Therapist-Style Companion persona (shimmer voice, temp: 0.75)...');
           break;
 
         default:
           // Default to friendly persona if no tone specified
           personaFile = 'persona_friendly.txt';
+          voice = 'nova';
+          temperature = 0.9;
           console.log('No tone specified - defaulting to Best-Friend Companion persona...');
       }
 
@@ -96,7 +106,7 @@ export class OpenAISessionManager {
       const instructions = fs.readFileSync(promptPath, 'utf-8');
 
       console.log(`✓ Loaded persona from ${personaFile}`);
-      return instructions;
+      return { instructions, voice, temperature };
 
     } catch (error) {
       console.error('Error loading persona file:', error);
@@ -104,7 +114,11 @@ export class OpenAISessionManager {
 
       // Fallback to friendly persona
       const fallbackPath = path.join(__dirname, '../../prompts/persona_friendly.txt');
-      return fs.readFileSync(fallbackPath, 'utf-8');
+      return {
+        instructions: fs.readFileSync(fallbackPath, 'utf-8'),
+        voice: 'nova',
+        temperature: 0.9
+      };
     }
   }
 
@@ -125,13 +139,13 @@ export class OpenAISessionManager {
             console.log('✓ Session configuration applied');
             break;
 
-          case 'input_audio_buffer.speech_started':
-            console.log('🎤 Speech detected');
-            this.sendToFrontend({
-              type: 'speech_started',
-              message: 'Listening...'
-            });
-            break;
+      case 'input_audio_buffer.speech_started':
+        console.log('🎤 Speech detected');
+        this.sendToFrontend({
+          type: 'speech_started',
+          message: 'Listening...'
+        });
+        break;
 
           case 'input_audio_buffer.speech_stopped':
             console.log('🎤 Speech stopped');
@@ -141,17 +155,22 @@ export class OpenAISessionManager {
             });
             break;
 
-          case 'input_audio_buffer.committed':
-            console.log('✓ Audio buffer committed');
-            break;
+      case 'input_audio_buffer.committed':
+        console.log('✓ Audio buffer committed');
+        if (this.hasActiveResponse) {
+          this.cancelActiveResponse();
+        }
+        this.openaiClient.requestResponse();
+        break;
 
-          case 'conversation.item.created':
-            console.log('💬 AI is generating response...');
-            this.sendToFrontend({
-              type: 'response_started',
-              message: 'Therapist is responding...'
-            });
-            break;
+      case 'conversation.item.created':
+        console.log('💬 AI is generating response...');
+        this.hasActiveResponse = true;
+        this.sendToFrontend({
+          type: 'response_started',
+          message: 'Therapist is responding...'
+        });
+        break;
 
           case 'response.audio_transcript.delta':
             // Optional: Log transcript chunks
@@ -173,13 +192,14 @@ export class OpenAISessionManager {
             });
             break;
 
-          case 'response.done':
-            console.log('✓ Response completed');
-            this.sendToFrontend({
-              type: 'response_done',
-              message: 'Ready to listen'
-            });
-            break;
+      case 'response.done':
+        console.log('✓ Response completed');
+        this.hasActiveResponse = false;
+        this.sendToFrontend({
+          type: 'response_done',
+          message: 'Ready to listen'
+        });
+        break;
 
           case 'error':
             // Step 6: Error handling
@@ -240,21 +260,37 @@ export class OpenAISessionManager {
         console.log(`[Frontend] Received: ${data.type}`);
 
         switch (data.type) {
+          // Handle OpenAI Realtime API format (from frontend)
+          case 'input_audio_buffer.append':
+            if (data.audio) {
+              console.log(`📤 Forwarding audio chunk to OpenAI (~${data.audio.length} chars base64)`);
+              this.openaiClient.sendAudioInput(data.audio);
+            }
+            break;
+
+          case 'input_audio_buffer.commit':
+            console.log('📤 Committing audio buffer to OpenAI');
+            this.openaiClient.commitAudioBuffer();
+            break;
+
+          // Legacy format support
           case 'audio_input':
-            // Step 3: Forward audio input to OpenAI
             if (data.audio) {
               this.openaiClient.sendAudioInput(data.audio);
             }
             break;
 
           case 'stop_audio':
-            // Clear audio buffer
             this.openaiClient.clearAudioBuffer();
             break;
 
           case 'commit_audio':
-            // Manually commit audio (if not using VAD)
             this.openaiClient.commitAudioBuffer();
+            break;
+
+          case 'response.cancel':
+            console.log('Frontend requested response cancellation');
+            this.cancelActiveResponse();
             break;
 
           default:
@@ -275,6 +311,21 @@ export class OpenAISessionManager {
     this.frontendWs.on('error', (error) => {
       console.error('Frontend WebSocket error:', error);
       this.cleanup();
+    });
+  }
+
+  private cancelActiveResponse(): void {
+    if (!this.hasActiveResponse) {
+      return;
+    }
+
+    console.log('Cancelling active OpenAI response due to barge-in');
+    this.openaiClient.cancelResponse();
+    this.hasActiveResponse = false;
+
+    this.sendToFrontend({
+      type: 'response_cancelled',
+      message: 'Therapist paused to listen'
     });
   }
 

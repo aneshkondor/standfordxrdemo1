@@ -9,7 +9,10 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnecting' | 'di
 export interface WebSocketMessage {
   type: string;
   payload?: any;
+  audio?: string;
+  message?: string;
   timestamp?: number;
+  [key: string]: unknown;
 }
 
 export interface WebSocketClientConfig {
@@ -288,7 +291,8 @@ export class WebSocketClient {
    * Manual disconnect (will not trigger reconnection)
    */
   public disconnect(): void {
-    console.log('[WebSocketClient] Manual disconnect');
+    console.log('[WebSocketClient] Manual disconnect called');
+    console.trace('[WebSocketClient] Disconnect stack trace');
     this.manualDisconnect = true;
     this.shouldReconnect = false;
 
@@ -376,3 +380,15 @@ export class WebSocketClient {
     this.messageQueue = [];
   }
 }
+
+/**
+ * Singleton WebSocket client instance
+ * Shared across the application for consistent connection management
+ */
+const websocketClient = new WebSocketClient({
+  url: import.meta.env.VITE_WS_URL || 'ws://localhost:3001',
+  autoConnect: false
+});
+
+// Default export is the singleton instance
+export default websocketClient;

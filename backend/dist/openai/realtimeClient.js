@@ -166,23 +166,37 @@ class OpenAIRealtimeClient {
         return this.isConnected;
     }
     /**
-     * Configure session with therapist instructions
+     * Configure session with persona instructions and voice
      * Step 2: Send Session Configuration
+     * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
+     * @param voice - Optional voice selection for this persona
+     * @param temperature - Optional temperature for response variability
      */
-    configureSession() {
+    configureSession(personaInstructions, voice, temperature) {
         try {
-            // Load therapist instructions from prompt file
-            const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
-            const instructions = fs.readFileSync(promptPath, 'utf-8').trim();
-            console.log('Loading therapist instructions from prompt file...');
+            let instructions;
+            let selectedVoice = voice || 'alloy';
+            let responseTemp = temperature || 0.8;
+            if (personaInstructions) {
+                // Use provided persona instructions
+                instructions = personaInstructions.trim();
+                console.log('Using provided persona instructions...');
+            }
+            else {
+                // Fallback to default therapist prompt
+                const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
+                instructions = fs.readFileSync(promptPath, 'utf-8').trim();
+                console.log('Loading default therapist instructions from prompt file...');
+            }
             console.log(`Instructions: ${instructions.substring(0, 100)}...`);
+            console.log(`Voice: ${selectedVoice}, Temperature: ${responseTemp}`);
             // Send session.update configuration
             const sessionConfig = {
                 type: 'session.update',
                 session: {
                     modalities: ['text', 'audio'],
                     instructions: instructions,
-                    voice: 'alloy',
+                    voice: selectedVoice,
                     input_audio_format: 'pcm16',
                     output_audio_format: 'pcm16',
                     input_audio_transcription: {
@@ -193,7 +207,9 @@ class OpenAIRealtimeClient {
                         threshold: 0.5,
                         prefix_padding_ms: 300,
                         silence_duration_ms: 200
-                    }
+                    },
+                    temperature: responseTemp,
+                    max_response_output_tokens: 4096
                 }
             };
             this.send(sessionConfig);
@@ -218,6 +234,39 @@ class OpenAIRealtimeClient {
         }
         catch (error) {
             console.error('Error sending audio input:', error);
+            throw error;
+        }
+    }
+    /**
+     * Explicitly request the model to generate a response
+     * Useful when server-side VAD doesn't auto-trigger replies
+     */
+    requestResponse() {
+        try {
+            const message = {
+                type: 'response.create'
+            };
+            this.send(message);
+            console.log('Requested new response from OpenAI');
+        }
+        catch (error) {
+            console.error('Error requesting response:', error);
+            throw error;
+        }
+    }
+    /**
+     * Cancel any actively generating response (used for barge-in)
+     */
+    cancelResponse() {
+        try {
+            const message = {
+                type: 'response.cancel'
+            };
+            this.send(message);
+            console.log('Requested cancellation of active response');
+        }
+        catch (error) {
+            console.error('Error cancelling response:', error);
             throw error;
         }
     }
