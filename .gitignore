@@ -11,6 +11,9 @@ dist/
 build/
 *.log
 
+# Project management (not needed)
+apm/
+
 # OS files
 .DS_Store
 Thumbs.db
