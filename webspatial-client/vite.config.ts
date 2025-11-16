@@ -8,12 +8,8 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 export default defineConfig({
   plugins: [
     basicSsl(),
-    react({
-      jsxImportSource: '@webspatial/react-sdk'
-    }),
-    webSpatial({
-      outputDir: ""
-    }),
+    react(),
+    webSpatial(),
     createHtmlPlugin({
       inject: {
         data: {
