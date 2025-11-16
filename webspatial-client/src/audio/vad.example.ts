@@ -5,7 +5,7 @@
  * with microphone capture and the OpenAI Realtime API.
  */
 
-import { createVAD, VADConfig, VADCallbacks } from './vad';
+import { createVAD, type VADConfig } from './vad';
 
 /**
  * Example 1: Basic VAD with default configuration
@@ -155,7 +155,7 @@ export async function openAIIntegrationExample(): Promise<void> {
       // This allows the API to process the complete utterance
     },
 
-    onVADUpdate: (isSpeaking, rmsLevel) => {
+    onVADUpdate: (_isSpeaking, rmsLevel) => {
       // Visualize audio level in UI
       updateAudioLevelMeter(rmsLevel);
     },

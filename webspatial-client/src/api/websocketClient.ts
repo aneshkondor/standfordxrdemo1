@@ -90,7 +90,7 @@ export class WebSocketClient {
     if (!this.ws) return;
 
     // Handle successful connection
-    this.ws.onopen = (event: Event) => {
+    this.ws.onopen = () => {
       console.log('[WebSocketClient] Connected successfully');
       this.connectionState = 'connected';
       this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
