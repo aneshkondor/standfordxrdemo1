@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
-import { WebSocketServer } from 'ws';
 import http from 'http';
+import { AudioStreamingWebSocketServer } from './websocketServer';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,24 +16,14 @@ app.get('/health', (_req: Request, res: Response) => {
 // Create HTTP server
 const server = http.createServer(app);
 
-// Create WebSocket server
-const wss = new WebSocketServer({ server });
+// Create WebSocket server instance attached to Express HTTP server
+const wsServer = new AudioStreamingWebSocketServer(server);
+wsServer.initialize();
 
-wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
-
-  ws.on('message', (message) => {
-    console.log('Received message:', message.toString());
-  });
-
-  ws.on('close', () => {
-    console.log('WebSocket client disconnected');
-  });
-});
-
-// Start server
+// Start server (both Express and WebSocket on same port)
 server.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
   console.log(`HTTP endpoint: http://localhost:${PORT}/health`);
   console.log(`WebSocket endpoint: ws://localhost:${PORT}`);
+  console.log(`Connected WebSocket clients: ${wsServer.getClientCount()}`);
 });
