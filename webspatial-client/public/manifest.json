@@ -1,0 +1,29 @@
+{
+  "name": "Aila VR Therapy",
+  "short_name": "Aila",
+  "description": "Vision Pro spatial wellbeing companion with conversational AI therapy",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#667BC6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "xr_main_scene": {
+    "default_size": {
+      "width": 1200,
+      "height": 800
+    },
+    "resizable": true
+  }
+}

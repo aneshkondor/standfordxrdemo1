@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:visionos": "npm run build && webspatial-builder run --manifest=public/manifest.json --project=dist --base=dist/webspatial/avp --platform=visionos --bundle-id=com.aila.therapy",
+    "build:ipa": "npm run build && webspatial-builder build --manifest=public/manifest.json --project=dist --base=dist/webspatial/avp --platform=visionos --bundle-id=com.aila.therapy",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -24,6 +26,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
+    "@webspatial/builder": "^1.0.4",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
