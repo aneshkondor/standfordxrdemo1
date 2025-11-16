@@ -1,11 +1,73 @@
-# React + TypeScript + Vite
+# Aila VR Therapy - WebSpatial visionOS App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Vision Pro spatial wellbeing companion with conversational AI therapy, built with React, Three.js, and WebSpatial.
 
-Currently, two official plugins are available:
+## Building for visionOS
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+**Requirements:**
+- macOS with Xcode installed
+- Vision Pro Simulator (included with Xcode)
+- Node.js and npm
+
+### Build and Run on Vision Pro Simulator
+
+```bash
+# Install dependencies
+npm install
+
+# Build and run on Vision Pro Simulator
+npm run build:visionos
+```
+
+This will:
+1. Build the React app with Vite
+2. Package it with WebSpatial for visionOS
+3. Launch the app in Vision Pro Simulator
+
+### Build IPA for Device Deployment
+
+```bash
+# Build IPA for deploying to actual Vision Pro device
+npm run build:ipa
+```
+
+The IPA file will be generated in the build output directory and can be sideloaded to your Vision Pro device.
+
+## Development
+
+### Web Development Mode
+
+For rapid development, you can run the app as a standard web app:
+
+```bash
+# Start development server
+npm run dev
+
+# Access at http://localhost:5173
+# Or from Vision Pro on local network: http://YOUR_IP:5173
+```
+
+### Environment Configuration
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+# Backend API URL
+VITE_API_URL=http://localhost:3001
+
+# WebSocket URL for real-time audio
+VITE_WS_URL=ws://localhost:3001
+```
+
+### Project Structure
+
+- `src/` - React application source
+  - `components/` - React components including spatial UI
+  - `xr/` - WebXR session management
+  - `audio/` - Audio pipeline (mic capture, VAD, playback)
+  - `api/` - Backend API and WebSocket clients
+- `public/` - Static assets including `manifest.json`
+- `dist/` - Build output (generated)
 
 ## React Compiler
 

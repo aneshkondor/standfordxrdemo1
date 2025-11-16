@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:visionos": "npm run build && webspatial-builder run --manifest=dist/manifest.json --project=. --base=dist --platform=visionos --bundle-id=com.aila.therapy",
-    "build:ipa": "npm run build && webspatial-builder build --manifest=dist/manifest.json --project=. --base=dist --platform=visionos --bundle-id=com.aila.therapy",
+    "build:visionos": "npm run build && webspatial-builder run --manifest=dist/manifest.json --project=dist --base=dist --platform=visionos --bundle-id=com.aila.therapy",
+    "build:ipa": "npm run build && webspatial-builder build --manifest=dist/manifest.json --project=dist --base=dist --platform=visionos --bundle-id=com.aila.therapy",
     "lint": "eslint .",
     "preview": "vite preview"
   },
