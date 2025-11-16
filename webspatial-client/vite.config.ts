@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     webspatial({
-      platforms: ['visionos']
+      mode: 'avp'
     })
   ],
   server: {
