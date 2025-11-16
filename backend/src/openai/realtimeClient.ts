@@ -142,16 +142,25 @@ export class OpenAIRealtimeClient {
   }
 
   /**
-   * Configure session with therapist instructions
+   * Configure session with persona instructions
    * Step 2: Send Session Configuration
+   * @param personaInstructions - Optional persona prompt. If not provided, loads default therapist prompt.
    */
-  public configureSession(): void {
+  public configureSession(personaInstructions?: string): void {
     try {
-      // Load therapist instructions from prompt file
-      const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
-      const instructions = fs.readFileSync(promptPath, 'utf-8').trim();
+      let instructions: string;
 
-      console.log('Loading therapist instructions from prompt file...');
+      if (personaInstructions) {
+        // Use provided persona instructions
+        instructions = personaInstructions.trim();
+        console.log('Using provided persona instructions...');
+      } else {
+        // Fallback to default therapist prompt
+        const promptPath = path.join(__dirname, '../../prompts/therapist_system.txt');
+        instructions = fs.readFileSync(promptPath, 'utf-8').trim();
+        console.log('Loading default therapist instructions from prompt file...');
+      }
+
       console.log(`Instructions: ${instructions.substring(0, 100)}...`);
 
       // Send session.update configuration

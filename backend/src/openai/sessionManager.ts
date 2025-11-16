@@ -1,5 +1,7 @@
 import WebSocket from 'ws';
 import { OpenAIRealtimeClient } from './realtimeClient';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Session Manager - Bridges frontend WebSocket and OpenAI Realtime API
@@ -17,16 +19,21 @@ export class OpenAISessionManager {
 
   /**
    * Initialize the OpenAI session
+   * @param tone - The selected AI tone/persona ('soft', 'friendly', 'analytical', 'therapist')
    */
-  public async initialize(): Promise<void> {
+  public async initialize(tone?: string): Promise<void> {
     try {
       console.log('Initializing OpenAI session...');
+      console.log(`Selected tone: ${tone || 'default (therapist)'}`);
 
       // Connect to OpenAI
       await this.openaiClient.connect();
 
-      // Configure session with therapist prompt
-      this.openaiClient.configureSession();
+      // Load appropriate persona based on tone
+      const personaInstructions = this.loadPersona(tone);
+
+      // Configure session with persona prompt
+      this.openaiClient.configureSession(personaInstructions);
 
       // Set up event handlers
       this.setupOpenAIEventHandlers();
@@ -49,6 +56,55 @@ export class OpenAISessionManager {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
+    }
+  }
+
+  /**
+   * Load persona instructions based on selected tone
+   * Maps tone selections to corresponding persona prompt files
+   */
+  private loadPersona(tone?: string): string {
+    try {
+      // Map tone to persona file
+      let personaFile: string;
+
+      switch (tone?.toLowerCase()) {
+        case 'soft':
+        case 'friendly':
+          personaFile = 'persona_friendly.txt';
+          console.log('Loading Best-Friend Companion persona...');
+          break;
+
+        case 'analytical':
+          personaFile = 'persona_analytical.txt';
+          console.log('Loading Analytical Companion persona...');
+          break;
+
+        case 'therapist':
+          personaFile = 'persona_therapist.txt';
+          console.log('Loading Therapist-Style Companion persona...');
+          break;
+
+        default:
+          // Default to friendly persona if no tone specified
+          personaFile = 'persona_friendly.txt';
+          console.log('No tone specified - defaulting to Best-Friend Companion persona...');
+      }
+
+      // Load persona file
+      const promptPath = path.join(__dirname, '../../prompts', personaFile);
+      const instructions = fs.readFileSync(promptPath, 'utf-8');
+
+      console.log(`✓ Loaded persona from ${personaFile}`);
+      return instructions;
+
+    } catch (error) {
+      console.error('Error loading persona file:', error);
+      console.log('Falling back to friendly persona...');
+
+      // Fallback to friendly persona
+      const fallbackPath = path.join(__dirname, '../../prompts/persona_friendly.txt');
+      return fs.readFileSync(fallbackPath, 'utf-8');
     }
   }
 
