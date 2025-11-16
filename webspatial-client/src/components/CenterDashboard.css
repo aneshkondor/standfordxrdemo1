@@ -1,0 +1,132 @@
+/* CenterDashboard Component Styles - Optimized for Spatial/VR Environments */
+
+.center-dashboard-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 400px;
+  padding: 40px;
+  background: rgba(20, 20, 30, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  max-width: 600px;
+  text-align: center;
+}
+
+.dashboard-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.dashboard-subtitle {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  font-weight: 400;
+}
+
+.start-therapy-button {
+  /* Button positioning and size */
+  padding: 20px 60px;
+  margin: 20px 0;
+  min-width: 240px;
+  min-height: 70px;
+
+  /* Typography */
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+
+  /* Visual styling */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+
+  /* Interaction */
+  cursor: pointer;
+  transition: all 0.3s ease;
+  transform: scale(1);
+}
+
+.start-therapy-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 28px rgba(102, 126, 234, 0.6);
+  background: linear-gradient(135deg, #7c8ff0 0%, #8b5bb8 100%);
+}
+
+.start-therapy-button:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.5);
+}
+
+.start-therapy-button:focus {
+  outline: 3px solid rgba(102, 126, 234, 0.8);
+  outline-offset: 4px;
+}
+
+.dashboard-instruction {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+  font-style: italic;
+}
+
+/* Responsive adjustments for smaller viewports */
+@media (max-width: 768px) {
+  .dashboard-title {
+    font-size: 2rem;
+  }
+
+  .dashboard-subtitle {
+    font-size: 1rem;
+  }
+
+  .start-therapy-button {
+    padding: 16px 48px;
+    min-height: 60px;
+    font-size: 1.25rem;
+  }
+}
+
+/* High contrast mode for accessibility */
+@media (prefers-contrast: high) {
+  .center-dashboard-panel {
+    background: rgba(0, 0, 0, 0.98);
+    border: 2px solid #ffffff;
+  }
+
+  .start-therapy-button {
+    border: 2px solid #ffffff;
+  }
+}
+
+/* Animation for panel entry */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.center-dashboard-panel {
+  animation: slideIn 0.4s ease-out;
+}
