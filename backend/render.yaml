@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: aila-therapy-backend
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CORS_ALLOW_ALL
+        value: false
+      - key: ALLOWED_ORIGINS
+        value: https://localhost:3001
+    healthCheckPath: /health
