@@ -74,9 +74,9 @@ export class OpenAISessionManager {
         case 'soft':
         case 'friendly':
           personaFile = 'persona_friendly.txt';
-          voice = 'nova'; // Warm, friendly, upbeat voice
+          voice = 'alloy'; // Warm, friendly, upbeat voice
           temperature = 0.9; // High variability for natural casual conversation
-          console.log('Loading Best-Friend Companion persona (nova voice, temp: 0.9)...');
+          console.log('Loading Best-Friend Companion persona (alloy voice, temp: 0.9)...');
           break;
 
         case 'analytical':
@@ -96,7 +96,7 @@ export class OpenAISessionManager {
         default:
           // Default to friendly persona if no tone specified
           personaFile = 'persona_friendly.txt';
-          voice = 'nova';
+          voice = 'alloy';
           temperature = 0.9;
           console.log('No tone specified - defaulting to Best-Friend Companion persona...');
       }
@@ -116,7 +116,7 @@ export class OpenAISessionManager {
       const fallbackPath = path.join(__dirname, '../../prompts/persona_friendly.txt');
       return {
         instructions: fs.readFileSync(fallbackPath, 'utf-8'),
-        voice: 'nova',
+        voice: 'alloy',
         temperature: 0.9
       };
     }
